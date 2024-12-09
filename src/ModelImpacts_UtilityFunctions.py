@@ -887,17 +887,18 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
     # print(Observed_Predicted_all)
     # print(Observed_Predicted_all.shape)
 
+    print_note(f"\n ### Overview\n ---")
     Total_Cpds = len(Observed_Predicted_df)
-    print_note(f"### Compounds with measured values : {Total_Cpds}")
+    print_note(f"##### Compounds with measured values : {Total_Cpds}")
     
     #Extract compounds in the training and test set
     Observed_Predicted_train = Observed_Predicted_df[Observed_Predicted_df.CompoundsInTrainingSet=='train']
     Observed_Predicted_df = Observed_Predicted_df[Observed_Predicted_df.CompoundsInTrainingSet.isin(['test',np.nan])]
     Compounds_TestSet = len(Observed_Predicted_df)
     TrainingSet = Total_Cpds- Compounds_TestSet
-    print_note(f"#### Training Set: {TrainingSet}")
-    print_note(f"#### Prospective Validation Set: {Compounds_TestSet}")
-   
+    print_note(f"##### Training Set: {TrainingSet}")
+    print_note(f"##### Prospective Validation Set: {Compounds_TestSet}")
+
     # print(Observed_Predicted_df)
 
     if not is_in_notebook():
@@ -911,150 +912,154 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
     if (len(Observed_Predicted_df)>0):
         
         min_thresh,max_thresh,Thresholds_selection = Thresh_Selection(Observed_Predicted_df.Predicted,DesiredProjectThreshold,scale)
-        
-        #Scatter plot for training set
-        print_note("\n --- \n ### Training set metrics")
-        if (TrainingSet > 0):
-            PlotTitle_Train = PlotTitle + " - Training Set"
-            ScatterPlot(Observed_Predicted_train,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Train)
 
-        else:
-            print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
-    
-        #Print the number of compounds below and above the desired project threshold
-        Compounds_BelowThresh = len(Observed_Predicted_df[Observed_Predicted_df.Observed <= DesiredProjectThreshold])
-        Compounds_AboveThresh = len(Observed_Predicted_df[Observed_Predicted_df.Observed > DesiredProjectThreshold])
-        Compounds_BelowThresh_text = str(len(Observed_Predicted_df[Observed_Predicted_df.Observed <= DesiredProjectThreshold]))
-        Compounds_AboveThresh_text = str(len(Observed_Predicted_df[Observed_Predicted_df.Observed > DesiredProjectThreshold]))
+        #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
+        print_note(f"\n --- \n ### Experimental values over time")
+        Exp_Values_Dist(Observed_Predicted_all,DesiredProjectThreshold,scale,PlotTitle)
 
-        #Estimate the number of good compounds made so far
-        if PosClass == '<':
-            ratio_GoodCpds = Compounds_BelowThresh / (Compounds_BelowThresh + Compounds_AboveThresh)
-        else:
-            ratio_GoodCpds = Compounds_AboveThresh / (Compounds_BelowThresh + Compounds_AboveThresh)
-                
-        ratio_GoodCpds_text  = str(int(ratio_GoodCpds*100)) +'%'
-        print_series_info_table(Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text)
+        # Model evaluation
+        print_note(f"\n --- \n ### Model evaluation")
 
-        #Relevant plots
-        print_note("\n --- \n ### Cumulative metrics on prospective predictions")
-            
-        #Print a caution statement, if there are a very few compounds in the test set
+        # Print a caution statement, if there are a very few compounds in the test set
         if ((Compounds_TestSet !=0) and (Compounds_TestSet < 20)):
             print(Fore.RED + 'Less than 20 compounds in the prospective validation set! Please treat the statistics with caution.' + Fore.RESET)
         
         PlotTitle_Test = PlotTitle + " - Prospective Validation Set"
         print_note(f"\n#### Predicted vs Experimental Values")
-        ScatterPlot(Observed_Predicted_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Test)     
+        ScatterPlot(Observed_Predicted_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Test)
 
-        #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
-        #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
-        #print("Thresholds_selection: ", Thresholds_selection)
-        
-        #min_thresh = min(Observed_Predicted_df.Predicted)
-        #max_thresh = max(Observed_Predicted_df.Predicted)
-        #increment_factor =(max_thresh-min_thresh)/50
-        
-        #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
-        #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
-     
-        #Compute the metrics corresponding to different thresholds
-        AllMetrics_df = pd.DataFrame()
-            
-        if Compounds_TestSet >= 10:    
-            for thresh in Thresholds_selection[1:]: #Exclude the first threshold, as there wouldn't be many compounds below the minimal threshold - Generated statistics can be misleading
-                #Estimate the number of datapoints at or below each threshold
-                NoOfObs =  len(Observed_Predicted_df[Observed_Predicted_df.Predicted<=thresh])
-                Compounds_percent = (NoOfObs/len(Observed_Predicted_df))*100
-            
-
-                #If the PosClass is '>', anything above that threshold would be considered as positive; If the PosClass is '<', anything below that threshold would fall under the positive class
-                if PosClass == '>':
-                    class_annotation = 'above'
-                    
-                    #Mapping to binaries based on different thresholds
-                    Observed_Predicted_df['Observed_Binaries'] = Observed_Predicted_df['Observed'].map(lambda x: int(x > thresh))
-                    Observed_Predicted_df['Predicted_Binaries'] = Observed_Predicted_df['Predicted'].map(lambda x: int(x > thresh))
-                    
-                    #Identifying the predicted likelihood to extract good compounds at a selected experimental threshold
-                    Observations_Pos_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted > thresh]
-                    if len(Observations_Pos_Extract)>5:
-                        Pred_Pos_Likelihood = (len(Observations_Pos_Extract[Observations_Pos_Extract['Observed'] > DesiredProjectThreshold])/len(Observations_Pos_Extract))*100
-                    else:
-                        Pred_Pos_Likelihood = math.nan
-                        
-                    #Identifying the likelihood to remove good compounds at a selected experimental threshold
-                    Observations_Neg_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted <= thresh]
-                    if len(Observations_Neg_Extract)>5:
-                        Pred_Neg_Likelihood = (len(Observations_Neg_Extract[Observations_Neg_Extract['Observed'] > DesiredProjectThreshold])/len(Observations_Neg_Extract))*100
-                    else:
-                        Pred_Neg_Likelihood = math.nan
-                    
-                    AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Observed_Predicted_df)],axis=1)
-                    AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
-                
-                else:
-                    class_annotation = 'below'
-                    Observed_Predicted_df['Observed_Binaries'] = Observed_Predicted_df['Observed'].map(lambda x: int(x <= thresh))
-                    Observed_Predicted_df['Predicted_Binaries'] = Observed_Predicted_df['Predicted'].map(lambda x: int(x <= thresh))
-                    
-                    Observations_Pos_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted <= thresh]
-                    if len(Observations_Pos_Extract)>5:
-                        Pred_Pos_Likelihood = (len(Observations_Pos_Extract[Observations_Pos_Extract['Observed'] <= DesiredProjectThreshold])/len(Observations_Pos_Extract))*100
-                    else:
-                        Pred_Pos_Likelihood = math.nan
-                        
-                    Observations_Neg_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted > thresh]
-                    if len(Observations_Neg_Extract)>5:
-                        Pred_Neg_Likelihood = (len(Observations_Neg_Extract[Observations_Neg_Extract['Observed'] <= DesiredProjectThreshold])/len(Observations_Neg_Extract))*100
-                    else:
-                        Pred_Neg_Likelihood = math.nan
-                        
-                    AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Observed_Predicted_df)],axis=1)
-                    AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
-            
-            AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded','Sensitivity','Specificity','BA']
-            AllMetrics_df = AllMetrics_df.drop_duplicates()#Duplicates exist, if the threshold chosen by the user is one among the 50 thresholds chosen for analysis; Remove them prior to calling the plot functions
-            
-
-            #Printing statistics at desired project threshold
-            Desired_Threshold_df = AllMetrics_df[AllMetrics_df.Threshold==DesiredProjectThreshold]
-            #print(Desired_Threshold_df)
-
-            #print('\033[1m{:30s}\033[0m'.format('Metrics at Selected Experiment threshold'))
-            Thresh_class = PosClass +" "+ str(DesiredProjectThreshold)
-            #print('Selected Experimental Threshold: ',Thresh_class)
-            #print('Positive class : ',PosClass,' selected threshold')
-
-        
-            #Sort the metrics data frame before plotting to have the thresholds in ascending order in x-axis
-            AllMetrics_df_sorted = AllMetrics_df.sort_values(by=['Threshold'],ascending = False)
-        
-            
-            print_note(f"\n#### Likelihood to predict for threshold")
-            LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle)
-            
-            print_note(f"\n#### Likelihood to predict for threshold [unbiased]")
-            LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle)
-            
+        if Compounds_TestSet >= 10:
             print_note(f"\n#### Model performance over time")  
             ModelStabilityPlot(Observed_Predicted_df,scale,PlotTitle)
 
-        else:
-            print('\n')
-            print_note(f"\n --- \n ### Predicted vs Experimental Values")
-            ScatterPlot(Observed_Predicted_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle)
-            print(Fore.RED+'Less than 10 compounds with measured values in the prospective validation set! Not possible to compute any metrics!'+Fore.RESET)
+    #Scatter plot for training set
+    print_note("\n #### Training set metrics")
+    if (TrainingSet > 0):
+        PlotTitle_Train = PlotTitle + " - Training Set"
+        ScatterPlot(Observed_Predicted_train,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Train)
 
-        #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
-        print_note(f"\n#### Experimental values over time")
-        Exp_Values_Dist(Observed_Predicted_all,DesiredProjectThreshold,scale,PlotTitle)
-
+    else:
+        print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
 
     #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
-    print_note(f"\n#### Time dependant Similarity/Correlation scores")
+    print_note(f"\n##### Time dependant Similarity, Correlation scores")
     discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
     time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle)
+
+    #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
+    #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
+    #print("Thresholds_selection: ", Thresholds_selection)
+    
+    #min_thresh = min(Observed_Predicted_df.Predicted)
+    #max_thresh = max(Observed_Predicted_df.Predicted)
+    #increment_factor =(max_thresh-min_thresh)/50
+    
+    #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
+    #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
+    
+    #Compute the metrics corresponding to different thresholds
+    AllMetrics_df = pd.DataFrame()
+        
+    if Compounds_TestSet >= 10:    
+        for thresh in Thresholds_selection[1:]: #Exclude the first threshold, as there wouldn't be many compounds below the minimal threshold - Generated statistics can be misleading
+            #Estimate the number of datapoints at or below each threshold
+            NoOfObs =  len(Observed_Predicted_df[Observed_Predicted_df.Predicted<=thresh])
+            Compounds_percent = (NoOfObs/len(Observed_Predicted_df))*100
+        
+
+            #If the PosClass is '>', anything above that threshold would be considered as positive; If the PosClass is '<', anything below that threshold would fall under the positive class
+            if PosClass == '>':
+                class_annotation = 'above'
+                
+                #Mapping to binaries based on different thresholds
+                Observed_Predicted_df['Observed_Binaries'] = Observed_Predicted_df['Observed'].map(lambda x: int(x > thresh))
+                Observed_Predicted_df['Predicted_Binaries'] = Observed_Predicted_df['Predicted'].map(lambda x: int(x > thresh))
+                
+                #Identifying the predicted likelihood to extract good compounds at a selected experimental threshold
+                Observations_Pos_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted > thresh]
+                if len(Observations_Pos_Extract)>5:
+                    Pred_Pos_Likelihood = (len(Observations_Pos_Extract[Observations_Pos_Extract['Observed'] > DesiredProjectThreshold])/len(Observations_Pos_Extract))*100
+                else:
+                    Pred_Pos_Likelihood = math.nan
+                    
+                #Identifying the likelihood to remove good compounds at a selected experimental threshold
+                Observations_Neg_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted <= thresh]
+                if len(Observations_Neg_Extract)>5:
+                    Pred_Neg_Likelihood = (len(Observations_Neg_Extract[Observations_Neg_Extract['Observed'] > DesiredProjectThreshold])/len(Observations_Neg_Extract))*100
+                else:
+                    Pred_Neg_Likelihood = math.nan
+                
+                AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Observed_Predicted_df)],axis=1)
+                AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
+            
+            else:
+                class_annotation = 'below'
+                Observed_Predicted_df['Observed_Binaries'] = Observed_Predicted_df['Observed'].map(lambda x: int(x <= thresh))
+                Observed_Predicted_df['Predicted_Binaries'] = Observed_Predicted_df['Predicted'].map(lambda x: int(x <= thresh))
+                
+                Observations_Pos_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted <= thresh]
+                if len(Observations_Pos_Extract)>5:
+                    Pred_Pos_Likelihood = (len(Observations_Pos_Extract[Observations_Pos_Extract['Observed'] <= DesiredProjectThreshold])/len(Observations_Pos_Extract))*100
+                else:
+                    Pred_Pos_Likelihood = math.nan
+                    
+                Observations_Neg_Extract = Observed_Predicted_df[Observed_Predicted_df.Predicted > thresh]
+                if len(Observations_Neg_Extract)>5:
+                    Pred_Neg_Likelihood = (len(Observations_Neg_Extract[Observations_Neg_Extract['Observed'] <= DesiredProjectThreshold])/len(Observations_Neg_Extract))*100
+                else:
+                    Pred_Neg_Likelihood = math.nan
+                    
+                AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Observed_Predicted_df)],axis=1)
+                AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
+        
+        AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded','Sensitivity','Specificity','BA']
+        AllMetrics_df = AllMetrics_df.drop_duplicates()#Duplicates exist, if the threshold chosen by the user is one among the 50 thresholds chosen for analysis; Remove them prior to calling the plot functions
+        
+
+        #Printing statistics at desired project threshold
+        Desired_Threshold_df = AllMetrics_df[AllMetrics_df.Threshold==DesiredProjectThreshold]
+        #print(Desired_Threshold_df)
+
+        #print('\033[1m{:30s}\033[0m'.format('Metrics at Selected Experiment threshold'))
+        Thresh_class = PosClass +" "+ str(DesiredProjectThreshold)
+        #print('Selected Experimental Threshold: ',Thresh_class)
+        #print('Positive class : ',PosClass,' selected threshold')
+
+    
+        #Sort the metrics data frame before plotting to have the thresholds in ascending order in x-axis
+        AllMetrics_df_sorted = AllMetrics_df.sort_values(by=['Threshold'],ascending = False)
+
+
+        # Model usage advice
+        print_note(f"\n --- \n ### Model usage advice")
+        
+        print_note(f"\n#### Likelihood to predict for threshold")
+        LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle)
+        
+        print_note(f"\n#### Likelihood to predict for threshold [unbiased]")
+        LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle)
+
+    else:
+        print('\n')
+        print_note(f"\n --- \n ### Predicted vs Experimental Values")
+        ScatterPlot(Observed_Predicted_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle)
+        print(Fore.RED+'Less than 10 compounds with measured values in the prospective validation set! Not possible to compute any metrics!'+Fore.RESET)
+
+    print_note("\n --- \n")
+    #Print the number of compounds below and above the desired project threshold
+    Compounds_BelowThresh = len(Observed_Predicted_df[Observed_Predicted_df.Observed <= DesiredProjectThreshold])
+    Compounds_AboveThresh = len(Observed_Predicted_df[Observed_Predicted_df.Observed > DesiredProjectThreshold])
+    Compounds_BelowThresh_text = str(len(Observed_Predicted_df[Observed_Predicted_df.Observed <= DesiredProjectThreshold]))
+    Compounds_AboveThresh_text = str(len(Observed_Predicted_df[Observed_Predicted_df.Observed > DesiredProjectThreshold]))
+
+    #Estimate the number of good compounds made so far
+    if PosClass == '<':
+        ratio_GoodCpds = Compounds_BelowThresh / (Compounds_BelowThresh + Compounds_AboveThresh)
+    else:
+        ratio_GoodCpds = Compounds_AboveThresh / (Compounds_BelowThresh + Compounds_AboveThresh)
+            
+    ratio_GoodCpds_text  = str(int(ratio_GoodCpds*100)) +'%'
+    print_series_info_table(Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text) 
     
     return
 
@@ -1082,7 +1087,8 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
     Observed_Predicted_df = Observed_Predicted_df[Observed_Predicted_df.CompoundsInTrainingSet.isin(['test',np.nan])]
     Test_Series_Count = Observed_Predicted_df.groupby(by='Series')['Compound Name'].count()
 
-    print_note(f"### Number of Compounds in Series: {len(Observed_Predicted_all)}")
+    print_note(f"\n ### Overview\n ---")
+    print_note(f"##### Number of Compounds in Series: {len(Observed_Predicted_all)}")
     summary_df = pd.DataFrame({"Training Set": Training_Series_Count.values}, index=Training_Series_Count.index)
     summary_df["Test Set"] = Test_Series_Count
     summary_df = summary_df.fillna(0).astype(int)
@@ -1127,7 +1133,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 max_thresh = max(Series_df.Predicted)
                 increment_factor = (max_thresh-min_thresh)/50
                 Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
-                
+
             #Print the number of compounds below and above the desired project threshold
             Compounds_BelowThresh = len(Series_df[Series_df.Observed <= DesiredProjectThreshold])
             Compounds_AboveThresh = len(Series_df[Series_df.Observed > DesiredProjectThreshold])
@@ -1142,21 +1148,18 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
             
             ratio_GoodCpds_text  = str(int(ratio_GoodCpds*100)) +'%'
 
-            print_note(f"\n --- \n## Series: {series}")
-            print_series_info_table(Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text)
-                
-            #Training set scatter plots
-            print_note("\n --- \n ### Training set metrics")
-            if (Training_SpecificSeries_count>0):
-                PlotTitle_Train = PlotTitle_series + " - Training Set"
-                ScatterPlot(Training_Series_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Train)
-            
-            else:
-                print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
+            #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
+            print_note(f"\n --- \n ### Experimental values over time for Series: {series}")
+            Exp_Values_Dist(Series_all_df,DesiredProjectThreshold,scale,PlotTitle_series)
 
-
+            # Model evaluation
+            print_note(f"\n --- \n ### Model evaluation for Series: {series}")
             
-            if (SpecificSeries_count > 10): 
+            if (SpecificSeries_count > 10):
+                PlotTitle_Test = PlotTitle_series + " - Prospective Validation Set"
+                print_note(f"\n#### Predicted vs Experimental Values for Series: {series}")
+                ScatterPlot(Series_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Test)
+
                 for thresh in Thresholds_selection[1:]: #Exclude the first threshold, as there wouldn't be many compounds below the minimal threshold - Generated statistics can be misleading
             
                     #Estimate the number of datapoints at or below each threshold
@@ -1212,49 +1215,46 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 Desired_Threshold_df = AllMetrics_df[AllMetrics_df.Threshold==DesiredProjectThreshold]
                 
                 #Sort the metrics data frame before plotting to have the thresholds in ascending order in x-axis
-                AllMetrics_df_sorted = AllMetrics_df.sort_values(by=['Threshold'],ascending = False)
-                
-                
-                
-                #Relevant plots
+                AllMetrics_df_sorted = AllMetrics_df.sort_values(by=['Threshold'],ascending = False) 
 
-                print_note("\n --- \n ### Cumulative metrics on prospective predictions")
+                print_note(f"\n#### Model performance over time for Series: {series}")  
+                ModelStabilityPlot(Series_df,scale,PlotTitle_series)
 
+                #Training set scatter plots
+                print_note(f"\n #### Training set metrics for Series: {series}")
+
+                #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
+                print_note(f"\n##### Time dependant Similarity, Correlation scores for Series {series}")
+                if (Training_SpecificSeries_count>0):
+                    PlotTitle_Train = PlotTitle_series + " - Training Set"
+                    ScatterPlot(Training_Series_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Train)
+                
+                else:
+                    print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
+    
                 if ((SpecificSeries_count !=0) and (SpecificSeries_count < 20)):
                     print('\n')
                     print(Fore.RED + 'Less than 20 compounds in the prospective validation set for series: '+  series + '! Please treat the statistics with caution.'+Fore.RESET)
-                
 
-                
-                PlotTitle_Test = PlotTitle_series + " - Prospective Validation Set"
-                print_note(f"\n#### Predicted vs Experimental Values for Series: {series}")
-                ScatterPlot(Series_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_Test)
-                
+                # Model usage advice
+                print_note(f"\n --- \n ### Model usage advice for Series: {series}")
+
                 print_note(f"\n#### Likelihood to predict for threshold for Series: {series}")
                 LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle_series)
                 
                 print_note(f"\n#### Likelihood to predict for threshold [unbiased] for Series: {series}")
                 LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle_series)
                 
-                print_note(f"\n#### Model performance over time for Series: {series}")  
-                ModelStabilityPlot(Series_df,scale,PlotTitle_series)
-                
                 
             else:
                 print('\n')
-                print_note(f"\n --- \n ### Predicted vs Experimental Values for Series: {series}")
+                print_note(f"\n --- \n ### Predicted vs Experimental Values for Series {series}")
                 ScatterPlot(Series_df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle_series)
                 print(Fore.RED+'Less than 10 compounds with measured values in the prospective validation set for series: '+ series + '! Not possible to compute any metrics!'+Fore.RESET)
-            
-            #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
-            print_note(f"\n#### Experimental values over time for Series: {series}") 
-            Exp_Values_Dist(Series_all_df,DesiredProjectThreshold,scale,PlotTitle_series)
 
-            #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
-            print_note(f"\n#### Time dependant Similarity/Correlation scores")
             discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
             time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle_series)
-    
+            print_series_info_table(Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text)
+
             
     return
-    
