@@ -296,8 +296,8 @@ def time_weighted_score_plot(df,discount_factor,PlotTitle):
         train_x, train_y = train_df['Observed'].to_numpy(), train_df['Predicted'].to_numpy()
         test_x, test_y = prospective_df['Observed'].to_numpy(), prospective_df['Predicted'].to_numpy()
 
-        #Consider only those train and test dataframes with atleast 5 datapoints to avoid any bias created by 1 or 2 highly similar or dissimilar datapoints
-        if ((len(train_df) >= 5) & (len(prospective_df) >= 5)):
+        #Consider only those train and test dataframes with atleast 10 datapoints to avoid any bias created by 1 or 2 highly similar or dissimilar datapoints
+        if ((len(train_df) >= 10) & (len(prospective_df) >= 10)):
             sim_score = similarity_score(train_x, train_y,test_x, test_y ,0.8)
             corr_score = correlation_score(train_x, train_y,test_x, test_y,0.2, return_nbr_idx=False)
             scores.append([sim_score, corr_score])
@@ -585,12 +585,12 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
         
        
         #Display PPV/FOR metrics at pre-selected and recommended thresholds in a table
-        Desired_Threshold_df.Pred_Pos_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Pos_Likelihood)) else  Desired_Threshold_df.Pred_Pos_Likelihood
-        Desired_Threshold_df.Pred_Neg_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Neg_Likelihood)) else  Desired_Threshold_df.Pred_Neg_Likelihood
+        Desired_Threshold_df.Pred_Pos_Likelihood = 'N/A' if (math.isnan(Desired_Threshold_df.Pred_Pos_Likelihood)) else  int(Desired_Threshold_df.Pred_Pos_Likelihood)
+        Desired_Threshold_df.Pred_Neg_Likelihood = 'N/A' if (math.isnan(Desired_Threshold_df.Pred_Neg_Likelihood)) else  int(Desired_Threshold_df.Pred_Neg_Likelihood)
         Max_PPV = 'N/A' if Max_PPV == -1 else int(Max_PPV)
         Max_FOR = 'N/A' if Max_FOR == -1 else int(Max_FOR)
 
-        print_PPV_FOR_table(DesiredProjectThreshold, str(int(Desired_Threshold_df.Pred_Pos_Likelihood)), str(int(Desired_Threshold_df.Pred_Neg_Likelihood)),
+        print_PPV_FOR_table(DesiredProjectThreshold, str(Desired_Threshold_df.Pred_Pos_Likelihood[0]), str(Desired_Threshold_df.Pred_Neg_Likelihood[0]),
                         str(round(10**Max_Thresh)), str(Max_PPV), str(Max_FOR))
 
     else:
@@ -611,12 +611,12 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
         ax2.plot(Threshold,Obs,color="grey",marker="o")
     
         #Display PPV/FOR metrics at pre-selected and recommended thresholds in a table
-        Desired_Threshold_df.Pred_Pos_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Pos_Likelihood)) else  Desired_Threshold_df.Pred_Pos_Likelihood
-        Desired_Threshold_df.Pred_Neg_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Neg_Likelihood)) else  Desired_Threshold_df.Pred_Neg_Likelihood
+        Desired_Threshold_df.Pred_Pos_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Pos_Likelihood)) else  int(Desired_Threshold_df.Pred_Pos_Likelihood)
+        Desired_Threshold_df.Pred_Neg_Likelihood = 0 if (math.isnan(Desired_Threshold_df.Pred_Neg_Likelihood)) else  int(Desired_Threshold_df.Pred_Neg_Likelihood)
         Max_PPV = 'N/A' if Max_PPV == -1 else int(Max_PPV)
         Max_FOR = 'N/A' if Max_FOR == -1 else int(Max_FOR)
 
-        print_PPV_FOR_table(DesiredProjectThreshold, str(int(Desired_Threshold_df.Pred_Pos_Likelihood)), str(int(Desired_Threshold_df.Pred_Neg_Likelihood)),
+        print_PPV_FOR_table(DesiredProjectThreshold, str(Desired_Threshold_df.Pred_Pos_Likelihood[0]), str(Desired_Threshold_df.Pred_Neg_Likelihood[0]),
                         str(round(Max_Thresh)), str(Max_PPV), str(Max_FOR))
 
     ax.set_xlabel('Predicted threshold',fontweight='bold')
@@ -679,8 +679,8 @@ def ModelStabilityPlot(df,scale,PlotTitle):
     
         # RMSEs & No. of compounds fluctuate a lot; It's important to smoothen the curves to see trends
         # Apply Savitzky-Golay filter with window size 5 and polynomial order 2
-        ModelPerf_df_sorted['RMSE'] = savgol_filter(ModelPerf_df_sorted['RMSE'], window_length=5, polyorder=2).round(2)
-        ModelPerf_df_sorted['NoOfCpds'] = savgol_filter(ModelPerf_df_sorted['NoOfCpds'], window_length=5, polyorder=2).astype(int)
+        #ModelPerf_df_sorted['RMSE'] = savgol_filter(ModelPerf_df_sorted['RMSE'], window_length=5, polyorder=2).round(2)
+        #ModelPerf_df_sorted['NoOfCpds'] = savgol_filter(ModelPerf_df_sorted['NoOfCpds'], window_length=5, polyorder=2).astype(int)
         
         fig,ax = plt.subplots(figsize=(5,5))
         fig.canvas.header_visible = False
@@ -688,15 +688,15 @@ def ModelStabilityPlot(df,scale,PlotTitle):
         ax.plot(ModelPerf_df_sorted.ModelVersion,ModelPerf_df_sorted.RMSE,color='deeppink',marker="o")
         ax2.plot(ModelPerf_df_sorted.ModelVersion,ModelPerf_df_sorted.NoOfCpds,color='grey',marker="o")
     
-        ax.set_ylim(0,2)
+        ax.set_ylim(0,2.5)
         ax.set_xlabel('Model Version',fontweight='bold')
         ax.set_ylabel('RMSE',fontweight='bold')
         ax2.set_ylabel('No. of compounds',fontweight='bold')
         
     
         ax.set_xticklabels(ModelPerf_df_sorted.ModelVersion,rotation = 90,fontsize=8)
-        ax.set_yticklabels(ModelPerf_df_sorted.RMSE,fontsize=8)
-        ax2.set_yticklabels(ModelPerf_df_sorted.NoOfCpds,fontsize=8)
+        #ax.set_yticklabels(ModelPerf_df_sorted.RMSE,fontsize=8)
+        #ax2.set_yticklabels(ModelPerf_df_sorted.NoOfCpds.astype(int),fontsize=8)
         ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
     
         PlotTitle_Stability = PlotTitle + ' - Model performance over time'
