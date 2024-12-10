@@ -78,13 +78,13 @@ def print_series_info_table(Compounds_BelowThresh, Compounds_AboveThresh, ratio_
 def print_PPV_FOR_table(PreSelectedThreshold, PPV, FOR,RecommendedThreshold,RecPPV,RecFOR):
     if is_in_notebook():
         display_markdown(f"""
-| Threshold Type | Threshold | PPV % | FOR % |
+|  | Predicted Threshold | PPV % | FOR % |
 | ------ | ----- | ----- | ----- |
-| Pre-selected Experiemental Threshold | {PreSelectedThreshold} | {PPV} | {FOR} |
+| Selected Experiemental Threshold | {PreSelectedThreshold} | {PPV} | {FOR} |
 | Recommended Threshold | {RecommendedThreshold} | {RecPPV} | {RecFOR} |     
 """, raw=True)
     else:
-        print(f"Threshold Type: {'Pre-selected Experiemental Threshold'}")
+        print(f"Threshold Type: {'Selected Experiemental Threshold'}")
         print(f"Threshold: {PreSelectedThreshold}")
         print(f"PPV at the selected threshold: {PPV}")
         print(f"FOR at the selected threshold: {FOR}")
@@ -101,7 +101,7 @@ def print_PPV_FOR_table(PreSelectedThreshold, PPV, FOR,RecommendedThreshold,RecP
 def print_Unbiased_PPV_FOR_table(RecommendedThreshold,RecPPV,RecFOR):
     if is_in_notebook():
         display_markdown(f"""
-| Threshold | PPV % | FOR % |
+| Experimental = Predicted threshold | PPV % | FOR % |
 | ----- | ----- | ----- |
 | {RecommendedThreshold} | {RecPPV} | {RecFOR} |     
 """, raw=True)
@@ -185,10 +185,10 @@ def LongestArrow(Thresh,PPV,FOR):
         # Find the threshold that corresponds to the maximum distance between the 2 curves
         Thresh_max_distance = Relevant_DistCalc_cols.Thresh[ind]
 
-        return Thresh_max_distance, Relevant_DistCalc_cols.PPV[ind],Relevant_DistCalc_cols.FOR[ind]
+        return max_distance, Thresh_max_distance, Relevant_DistCalc_cols.PPV[ind],Relevant_DistCalc_cols.FOR[ind]
 
     else:
-        return -1,-1,-1   #Setting an arbitrary value, if PPV and FOR values are NAN for all the predicted thresholds
+        return -1,-1,-1,-1   #Setting an arbitrary value, if PPV and FOR values are NAN for all the predicted thresholds
 
 
 # Scoring functions relevant for time dependant MPO optimization
@@ -329,7 +329,7 @@ def time_weighted_score_plot(df,discount_factor,PlotTitle):
             plt.rc('xtick',labelsize=8)
             plt.rc('ytick',labelsize=8)
 
-            plt.legend(['similarity', 'corr']+ ['(tw) similarity', '(tw) corr'],fontsize=7)
+            plt.legend(['Similarity of data', 'Similarity of correlation']+ ['Similarity of data (Time-weighted)', 'Similarity of correlation (Time-weighted)'],fontsize=7)
             plt.title(PlotTitle)
             plt.ylim([0,1.1])
             plt.show()
@@ -353,7 +353,7 @@ def Calculate_allMetrics(Parameter_df):
         PercentGoodCpds_Discard = (fn/(tn+fn))*100 if((tn+fn)>5) else np.nan
         #PercentGoodCpds_Discard = (fn/(tn+fn))*100
         BA = balanced_accuracy_score(Parameter_df.Observed_Binaries,Parameter_df.Predicted_Binaries)
-        Metrics_df = pd.DataFrame([[PPV,PercentGoodCpds_Discard,Sensitivity,Specificity,BA]])
+        Metrics_df = pd.DataFrame([[PPV,PercentGoodCpds_Discard]]).round(1)
         return Metrics_df
  
 
@@ -394,14 +394,10 @@ def LinePlot(Threshold,Obs,Metric1,Metric2,DesiredProjectThreshold,Compounds_Tes
         if ((len(Metric1)!=0) & (len(Metric2)!=0)):
             #call the function to calculate the longest arrow and display them on the plots
             Logged_Thresh = np.array(np.log10(Threshold))
-            Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Logged_Thresh,Metric1,Metric2)
-            
+            Max_Dist,Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Logged_Thresh,Metric1,Metric2)
+
             plt.annotate(text='',xy=(Max_Thresh,Max_FOR), xytext=(Max_Thresh,Max_PPV),
                 arrowprops=dict(arrowstyle='<->',color='plum'))
- 
-
-        plt.annotate(text='',xy=(Max_Thresh,Max_FOR), xytext=(Max_Thresh,Max_PPV),
-            arrowprops=dict(arrowstyle='<->',color='plum'))
         
         ax2=ax.twinx()
         ax2.plot(np.log10(Threshold),Obs,color="grey",marker="o")
@@ -420,7 +416,7 @@ def LinePlot(Threshold,Obs,Metric1,Metric2,DesiredProjectThreshold,Compounds_Tes
         if ((len(Metric1)!=0) & (len(Metric2)!=0)):
 
             #call the function to calculate the longest arrow and display them on the plots
-            Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Threshold,Metric1,Metric2)
+            Max_Dist,Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Threshold,Metric1,Metric2)
             plt.annotate(text='',xy=(Max_Thresh,Max_FOR), xytext=(Max_Thresh,Max_PPV),
                 arrowprops=dict(arrowstyle='<->',color='plum'))
         
@@ -459,9 +455,6 @@ def LinePlot(Threshold,Obs,Metric1,Metric2,DesiredProjectThreshold,Compounds_Tes
     fig.tight_layout()
     plt.show()
     
-
-
-    
     
 #A plot to show the classical Predicted vs Experimental correlations
 #The threshold desired for a specific project is highlighted by an orange dotted line
@@ -485,8 +478,6 @@ def ScatterPlot(df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle
             plt.axvline(x=np.log10(DesiredProjectThreshold),color='orangered',linestyle='dotted')
             plt.xlim(0,max(np.log10(df.Predicted)))
             plt.ylim(0,max(np.log10(df.Observed)))
-            
-
 
             #Replace log values with actual values to make the plots much more intuitive
             ax = Reset_x_ticks(df.Predicted,ax)
@@ -506,13 +497,13 @@ def ScatterPlot(df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle
             ax.set_yticklabels(new_y_ticks, rotation = 45)
             
             #Compute observed vs Predicted correlations and RMSEs
-            if len(df)>= 5:
+            if len(df)>= 10:
                 pearson_r2 = str(round((pearsonr(np.log10(df.Observed),np.log10(df.Predicted)).statistic)**2,2))
                 r2 = str(round(r2_score(np.log10(df.Observed),np.log10(df.Predicted)),2))
                 rmse = str(round(math.sqrt(mean_squared_error(np.log10(df.Observed),np.log10(df.Predicted))),2))
                 print_metrics_table(pearson_r2, r2, rmse)
             else:
-                print(Fore.RED+"Less than 5 compounds to compute R2 and RMSEs!"+Fore.RESET)
+                print(Fore.RED+"Less than 10 compounds to compute R2 and RMSEs!"+Fore.RESET)
 
   
         else:
@@ -523,13 +514,13 @@ def ScatterPlot(df,DesiredProjectThreshold,min_thresh,max_thresh,scale,PlotTitle
             plt.axvline(x=DesiredProjectThreshold,color='orangered',linestyle='dotted')
             
             #Compute observed vs Predicted correlations and RMSEs
-            if len(df)>= 5:
+            if len(df)>= 10:
                 pearson_r2 = str(round((pearsonr(df.Observed,df.Predicted).statistic)**2,2))
                 r2 = str(round(r2_score(df.Observed,df.Predicted),2))
                 rmse = str(round(math.sqrt(mean_squared_error(df.Observed,df.Predicted)),2))
                 print_metrics_table(pearson_r2, r2, rmse)
             else:
-                print(Fore.RED+"Less than 5 compounds to compute R2 and RMSEs!"+Fore.RESET)
+                print(Fore.RED+"Less than 10 compounds to compute R2 and RMSEs!"+Fore.RESET)
 
             
         plt.xlabel('Predicted',fontweight='bold')
@@ -579,13 +570,14 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
         if ((len(Pred_Pos_Likelihood)!=0) & (len(Pred_Neg_Likelihood)!=0)):
             #call the function to calculate the longest arrow and display them on the plots
             Logged_Thresh = np.array(np.log10(Threshold))
-            Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Logged_Thresh,Pred_Pos_Likelihood,Pred_Neg_Likelihood)
+            Max_Dist,Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Logged_Thresh,Pred_Pos_Likelihood,Pred_Neg_Likelihood)
             
             plt.annotate(text='',xy=(Max_Thresh,Max_FOR), xytext=(Max_Thresh,Max_PPV),
                 arrowprops=dict(arrowstyle='<->',color='plum'))
-
-            plt.annotate(text='',xy=(np.log10(DesiredProjectThreshold),int(Desired_Threshold_df.Pred_Neg_Likelihood)), xytext=(np.log10(DesiredProjectThreshold),int(Desired_Threshold_df.Pred_Pos_Likelihood)),
-                arrowprops=dict(arrowstyle='<->',color='green'))
+            #If PPV at the desired threshold is 0, no arrows pointing to PPV can be drawn
+            if (~np.isnan(Desired_Threshold_df.Pred_Pos_Likelihood[0])):
+                plt.annotate(text='',xy=(np.log10(DesiredProjectThreshold),Desired_Threshold_df.Pred_Neg_Likelihood[0]), xytext=(np.log10(DesiredProjectThreshold),Desired_Threshold_df.Pred_Pos_Likelihood[0]),
+                    arrowprops=dict(arrowstyle='<->',color='green'))
  
         ax2=ax.twinx()
         ax2.plot(np.log10(Threshold),Obs,color="grey",marker="o")
@@ -598,25 +590,21 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
         Max_PPV = 'N/A' if Max_PPV == -1 else int(Max_PPV)
         Max_FOR = 'N/A' if Max_FOR == -1 else int(Max_FOR)
 
-
         print_PPV_FOR_table(DesiredProjectThreshold, str(int(Desired_Threshold_df.Pred_Pos_Likelihood)), str(int(Desired_Threshold_df.Pred_Neg_Likelihood)),
-                        str(int(10**Max_Thresh)), str(Max_PPV), str(Max_FOR))
-       
-       
- 
-        
+                        str(round(10**Max_Thresh)), str(Max_PPV), str(Max_FOR))
+
     else:
         ax.plot(Threshold,Pred_Pos_Likelihood,color='turquoise',marker="o")
         ax.plot(Threshold,Pred_Neg_Likelihood,color='indigo',marker="o")
 
         if ((len(Pred_Pos_Likelihood)!=0) & (len(Pred_Neg_Likelihood)!=0)):
             #call the function to calculate the longest arrow and display them on the plots
-            Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Threshold,Pred_Pos_Likelihood,Pred_Neg_Likelihood)
+            Max_Dist,Max_Thresh,Max_PPV,Max_FOR = LongestArrow(Threshold,Pred_Pos_Likelihood,Pred_Neg_Likelihood)
 
             plt.annotate(text='',xy=(Max_Thresh,Max_FOR), xytext=(Max_Thresh,Max_PPV),
                 arrowprops=dict(arrowstyle='<->',color='plum'))
 
-            plt.annotate(text='',xy=(DesiredProjectThreshold,int(Desired_Threshold_df.Pred_Neg_Likelihood)), xytext=(DesiredProjectThreshold,int(Desired_Threshold_df.Pred_Pos_Likelihood)),
+            plt.annotate(text='',xy=(DesiredProjectThreshold,Desired_Threshold_df.Pred_Neg_Likelihood), xytext=(DesiredProjectThreshold,Desired_Threshold_df.Pred_Pos_Likelihood),
                 arrowprops=dict(arrowstyle='<->',color='green'))
         
         ax2=ax.twinx()
@@ -629,7 +617,7 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
         Max_FOR = 'N/A' if Max_FOR == -1 else int(Max_FOR)
 
         print_PPV_FOR_table(DesiredProjectThreshold, str(int(Desired_Threshold_df.Pred_Pos_Likelihood)), str(int(Desired_Threshold_df.Pred_Neg_Likelihood)),
-                        str(int(Max_Thresh)), str(Max_PPV), str(Max_FOR))
+                        str(round(Max_Thresh)), str(Max_PPV), str(Max_FOR))
 
     ax.set_xlabel('Predicted threshold',fontweight='bold')
     ax.set_ylabel('PPV & FOR (using SET) -  Likelihood% ',fontweight='bold')
@@ -655,8 +643,10 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
                 Line2D([], [],  color='turquoise',linestyle='solid'),
                 Line2D([], [],  color='indigo',linestyle='solid'),
                 Line2D([], [], color='grey', linestyle='solid')]
-    Likelihood_Pos_label = 'Predicted likelihood to extract good compounds at the pre-selected experimental threshold'
-    Likelihood_Neg_label = 'Predicted likelihood to discard good compounds at the pre-selected experimental threshold'
+    
+    #Rec_Threshold_label =  'Recommended Experimental Threshold: '+ Pos_class +  str(Max_Thresh)
+    Likelihood_Pos_label = 'Likelihood to extract good compounds at the pre-selected experimental threshold'
+    Likelihood_Neg_label = 'Likelihood to discard good compounds at the pre-selected experimental threshold'
     ax.legend(handles=myHandle, labels = [Threshold_label,Likelihood_Pos_label,Likelihood_Neg_label,'% of compounds tested (cumulative)'], bbox_to_anchor=(0.5, -0.2),loc='upper center',fontsize=7)
     plt.tight_layout()
     plt.show()
@@ -668,12 +658,10 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
 #I/P: Model versions together with the corresponding experimental and predicted values
 
 def ModelStabilityPlot(df,scale,PlotTitle):
-
     #Extarct the months and years from the date
     df['ModelVersionDate'] = pd.DataFrame(df['ModelVersion'].apply(lambda x: x.split("-")[0]))
     df['ModelVersionDate'] = pd.to_datetime(df['ModelVersionDate'])
     df['Model_Month_year'] = df['ModelVersionDate'].apply(lambda x: x.strftime("%b %Y"))
-
     #Group by Month/Year and compute RMSEs
     ModelPerf_df = pd.DataFrame()
     ModelPerf_df['RMSE']= df.groupby('Model_Month_year')[['Observed','Predicted']].apply(lambda x: rmse_score(x['Observed'],x['Predicted'],scale))
@@ -685,7 +673,6 @@ def ModelStabilityPlot(df,scale,PlotTitle):
     ModelPerf_df_sorted = ModelPerf_df.sort_index()
     ModelPerf_df_sorted = ModelPerf_df_sorted[ModelPerf_df_sorted.NoOfCpds >=5] #Consider only those RMSES computed based on atleast 5 compounds
     #print(len(ModelPerf_df_sorted))
-
     
     #Plot RMSEs / No. of compounds against the Model versions
     if len(ModelPerf_df_sorted) >1:
@@ -714,7 +701,6 @@ def ModelStabilityPlot(df,scale,PlotTitle):
     
         PlotTitle_Stability = PlotTitle + ' - Model performance over time'
         ax.set_title(PlotTitle_Stability)
-
     
         myHandle = [Line2D([], [],  color='deeppink'),
                 Line2D([], [],  color='grey',linestyle='solid')]
@@ -739,7 +725,6 @@ def ModelStabilityPlot(df,scale,PlotTitle):
 def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle): 
     #df = df[(df.Observed >= 1)]
     df2 = pd.DataFrame()
-
     #Group by Month/Year and compute mean experimental values
     df['Month_Year'] = pd.DataFrame(df['SampleRegDate'].apply(lambda x: datetime.strptime(x, '%d-%b-%Y').strftime('%b %Y')))
     df2['NoOfCpds'] = df.groupby('Month_Year')['Observed'].agg(total='count')['total']
@@ -748,13 +733,11 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
     df2['Min'] = df.groupby('Month_Year')['Observed'].agg(minimum='min')['minimum']
     df2['Max'] = df.groupby('Month_Year')['Observed'].agg(maximum='max')['maximum']
     df2 = df2.dropna(how='any')
-
     df2['RegDate_Month_Year'] = pd.to_datetime(df2.index)
     df2_sorted = df2.sort_values(by='RegDate_Month_Year').reset_index()
     df2_sorted = df2_sorted[df2_sorted['RegDate_Month_Year'] >= '01-01-2021'] # Consider only the data corresponding to last 3 years
     
     df2_sorted = df2_sorted[df2_sorted.NoOfCpds >=5] #Consider only those means and SDs computed based on atleast 5 compounds
-    
 
     
     #Plot Median experimental values / No. of compounds against the Sample Registration Date
@@ -766,13 +749,9 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             ax.plot(df2_sorted.Month_Year,np.log10(df2_sorted.Median_Exp),marker='o',color='dodgerblue')
             ylims = np.arange(min(np.log10(df.Observed))-0.5,max(np.log10(df.Observed))+0.5,step=0.5)
             ax.set_ylim(min(np.log10(df.Observed))-0.5,max(np.log10(df.Observed))+0.5)
-                
-
 
             #ax.errorbar(df2_sorted.Month_Year,np.log10(df2_sorted.Mean_Exp),yerr= np.stack([(np.log10(df2_sorted.Mean_Exp)-np.log10(df2_sorted['Min']).to_numpy()),((np.log10(df2_sorted['Max'])-np.log10(df2_sorted.Mean_Exp)).to_numpy())]), color='maroon',ecolor= 'lightcoral',fmt='-o',capsize=5)
             #ax2.plot(df2_sorted.Month_Year,df2_sorted.NoOfCpds,color='grey',marker="o")
- 
-            ax.axhline(y=np.log10(DesiredProjectThreshold),color='orangered',linestyle='dotted')
                 
             ax.set_xlabel('Sample Registration Date',fontweight='bold')
             ax.set_ylabel('Experimental values - Median',fontweight='bold')
@@ -790,11 +769,13 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             new_y_ticks = [int(10 ** y) for y in y_ticks]
             ax.set_yticks(y_ticks)
             ax.set_yticklabels(new_y_ticks, rotation = 45,fontsize=8)
+            ax.axhline(y=np.log10(DesiredProjectThreshold),color='orangered',linestyle='dotted')
             
             PlotTitle_Stability = PlotTitle + ' - Experimental values over time'
             ax.set_title(PlotTitle_Stability)
             plt.rc('xtick',labelsize=8)
             plt.rc('ytick',labelsize=8)
+
             
             myHandle = [Line2D([], [],  color='dodgerblue'),
             Line2D([], [],  color='orange',linestyle=':')]
@@ -822,7 +803,6 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
 
             #ax.errorbar(df2_sorted.Month_Year,df2_sorted.Mean_Exp,yerr= np.stack([(df2_sorted.Mean_Exp-df2_sorted['Min']).to_numpy(),(df2_sorted['Max']-df2_sorted.Mean_Exp).to_numpy()]), color='maroon',ecolor='lightcoral',fmt='-o',capsize=5)
             ax.plot(df2_sorted.Month_Year,df2_sorted.Median_Exp,marker="o",color='dodgerblue')
-            ax.axhline(y=DesiredProjectThreshold,color='orangered',linestyle='dotted')
             
             ax.set_xlabel('Sample Registration Date',fontweight='bold')
             ax.set_ylabel('Experimental values - Median',fontweight='bold')
@@ -833,9 +813,10 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
         
             #Replace log values with actual values to make the plots much more intuitive
             y_ticks = ax.get_yticks()
-            new_y_ticks = [int(y) for y in y_ticks]
+            new_y_ticks = [round(y,1) for y in y_ticks]
             ax.set_yticks(y_ticks)
             ax.set_yticklabels(new_y_ticks, rotation = 45)
+            ax.axhline(y=DesiredProjectThreshold,color='orangered',linestyle='dotted')
         
             PlotTitle_Stability = PlotTitle + ' - Experimental values over time'
             ax.set_title(PlotTitle_Stability)
@@ -906,11 +887,13 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
         print('*********************************************************************************')
         print('*********************************************************************************')
         print('\n')
+    else:
+        print_note('---')
 
 
-    #Increment factor is set to cover a broad range of thresholds (50) used for calculating PPV/Discarded compounds %
     if (len(Observed_Predicted_df)>0):
         
+        #Call the thresh function to get the threshold ranges for calculating the various metrics
         min_thresh,max_thresh,Thresholds_selection = Thresh_Selection(Observed_Predicted_df.Predicted,DesiredProjectThreshold,scale)
 
         #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
@@ -946,18 +929,6 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
     discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
     time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle)
 
-    #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
-    #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
-    #print("Thresholds_selection: ", Thresholds_selection)
-    
-    #min_thresh = min(Observed_Predicted_df.Predicted)
-    #max_thresh = max(Observed_Predicted_df.Predicted)
-    #increment_factor =(max_thresh-min_thresh)/50
-    
-    #Set Threshold ranges for the plot; Project threshold is appended to provide statistics for the users
-    #Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
-    
-    #Compute the metrics corresponding to different thresholds
     AllMetrics_df = pd.DataFrame()
         
     if Compounds_TestSet >= 10:    
@@ -1012,9 +983,8 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
                 AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Observed_Predicted_df)],axis=1)
                 AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
         
-        AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded','Sensitivity','Specificity','BA']
+        AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded']
         AllMetrics_df = AllMetrics_df.drop_duplicates()#Duplicates exist, if the threshold chosen by the user is one among the 50 thresholds chosen for analysis; Remove them prior to calling the plot functions
-        
 
         #Printing statistics at desired project threshold
         Desired_Threshold_df = AllMetrics_df[AllMetrics_df.Threshold==DesiredProjectThreshold]
@@ -1033,10 +1003,10 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
         # Model usage advice
         print_note(f"\n --- \n ### Model usage advice")
         
-        print_note(f"\n#### Likelihood to predict for threshold")
+        print_note(f"\n#### What predicted threshold gives best enrichment?")
         LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle)
-        
-        print_note(f"\n#### Likelihood to predict for threshold [unbiased]")
+
+        print_note(f"\n#### Should you select another experimental threshold to get better enrichment from model?")
         LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle)
 
     else:
@@ -1063,6 +1033,20 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
     
     return
 
+
+def Thresh_Selection(Preds,DesiredProjectThreshold,scale):
+    if scale == "log":
+        #transform to log, do the selection of thresholds, transform back to non logged values
+        min_thresh = np.log10(min(Preds))
+        max_thresh = np.log10(max(Preds))
+        increment_factor = (max_thresh-min_thresh)/50
+        Thresholds_selection = np.append([(10 ** x) for x in np.arange(min_thresh,max_thresh,increment_factor)],[DesiredProjectThreshold])
+    else:
+        min_thresh = min(Preds)
+        max_thresh = max(Preds)
+        increment_factor = (max_thresh-min_thresh)/50
+        Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
+    return min_thresh,max_thresh,Thresholds_selection
 
   
 '''
@@ -1121,18 +1105,8 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
         PlotTitle_series = PlotTitle+"  (Series: "+str(series)+")"        
               
         if ((SpecificSeries_count!=[]) and (len(Series_df.Predicted)>0)):
-            #Increment factor is set to cover a broad range of thresholds (50) used for calculating PPV/Discarded compounds %
-            if scale == "log":
-            #transform to log, do the selection of thresholds, transform back to non logged values
-                min_thresh = np.log10(min(Series_df.Predicted))
-                max_thresh = np.log10(max(Series_df.Predicted))
-                increment_factor = (max_thresh-min_thresh)/50
-                Thresholds_selection = np.append([(10 ** x) for x in np.arange(min_thresh,max_thresh,increment_factor)],[DesiredProjectThreshold])
-            else:
-                min_thresh = min(Series_df.Predicted)
-                max_thresh = max(Series_df.Predicted)
-                increment_factor = (max_thresh-min_thresh)/50
-                Thresholds_selection = np.append(np.arange(min_thresh,max_thresh,increment_factor),[DesiredProjectThreshold])
+            #Call the thresh function to get the threshold ranges for calculating the various metrics
+            min_thresh,max_thresh,Thresholds_selection = Thresh_Selection(Series_df.Predicted,DesiredProjectThreshold,scale)
 
             #Print the number of compounds below and above the desired project threshold
             Compounds_BelowThresh = len(Series_df[Series_df.Observed <= DesiredProjectThreshold])
@@ -1208,7 +1182,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                         AllMetrics = pd.concat([pd.DataFrame([[date.today(),thresh,Compounds_percent,Pred_Pos_Likelihood,Pred_Neg_Likelihood]]),Calculate_allMetrics(Series_df)],axis=1)
                         AllMetrics_df = pd.concat([AllMetrics_df,AllMetrics],axis=0)
 
-                AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded','Sensitivity','Specificity','BA']
+                AllMetrics_df.columns=['Calculation Date','Threshold','CompoundsTested','Pred_Pos_Likelihood','Pred_Neg_Likelihood','PPV','CompoundsDiscarded']
                 AllMetrics_df = AllMetrics_df.drop_duplicates() #Duplicates exist, if the threshold chosen by the user is one among the 50 thresholds chosen for analysis; Remove them prior to calling the plot functions
             
                  #Printing statistics at desired project threshold
@@ -1256,5 +1230,4 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
             time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle_series)
             print_series_info_table(Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text)
 
-            
     return
