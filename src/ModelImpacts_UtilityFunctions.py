@@ -1213,10 +1213,10 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 # Model usage advice
                 print_note(f"\n --- \n ### Model usage advice for Series: {series}")
 
-                print_note(f"\n#### Likelihood to predict for threshold for Series: {series}")
+                print_note(f"\n#### What predicted threshold gives best enrichment for Series: {series}")
                 LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle_series)
                 
-                print_note(f"\n#### Likelihood to predict for threshold [unbiased] for Series: {series}")
+                print_note(f"\n#### Should you select another experimental threshold for Series: {series} to get better enrichment from model?")
                 LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle_series)
                 
                 
