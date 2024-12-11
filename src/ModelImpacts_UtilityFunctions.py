@@ -1222,7 +1222,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
                 print_note(f"\n##### Time dependant Similarity, Correlation scores for Series {series}")
                 discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
-                time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle_series)
+                time_weighted_score_plot(Series_all_df,discount_factor,PlotTitle_series)
                 
                 
             else:
