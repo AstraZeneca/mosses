@@ -1111,7 +1111,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
             ratio_GoodCpds_text  = str(int(ratio_GoodCpds*100)) +'%'
 
             #Print all statistics in a table
-            print_note(f"\n ### Series Overview: {series}")
+            print_note(f"\n ### Overview for Series: {series}")
             print_cpds_info_table(TotalCpds_SeriesSpecificCount,Training_SpecificSeries_count,SpecificSeries_count, Compounds_BelowThresh_text, Compounds_AboveThresh_text, ratio_GoodCpds_text)
 
             #Plot to show Experimental values over time should be displayed, irrespective of the size of the test set
