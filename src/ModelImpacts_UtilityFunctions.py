@@ -31,10 +31,6 @@ from scipy.stats import gmean
 from scipy.signal import savgol_filter
 from IPython.core.display import display_markdown, display_html
 
-
-import warnings
-warnings.filterwarnings('ignore')
-
 plt.ioff()
 
 def is_in_notebook():
@@ -925,15 +921,11 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
             print(Fore.RED + 'Less than 20 compounds in the prospective validation set! Please treat the statistics with caution.' + Fore.RESET)
         
         PlotTitle_Test = PlotTitle + " - Prospective Validation Set"
-        print_note(f"\n#### Predicted vs Experimental Values")
+        print_note(f"\n#### Predicted vs Experimental Values (prospective)")
         ScatterPlot(Observed_Predicted_df,DesiredProjectThreshold,scale,PlotTitle_Test)
 
-        if Compounds_TestSet >= 10:
-            print_note(f"\n#### Model performance over time")  
-            ModelStabilityPlot(Observed_Predicted_df,scale,PlotTitle)
-
     #Scatter plot for training set
-    print_note("\n #### Training set metrics")
+    print_note("\n #### Predicted vs Experimental Values (training set)")
     if (TrainingSet > 0):
         PlotTitle_Train = PlotTitle + " - Training Set"
         ScatterPlot(Observed_Predicted_train,DesiredProjectThreshold,scale,PlotTitle_Train)
@@ -941,10 +933,15 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
     else:
         print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
 
-    #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
-    print_note(f"\n##### Time dependant Similarity, Correlation scores")
-    discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
-    time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle)
+    if (len(Observed_Predicted_df)>0) and Compounds_TestSet >= 10:
+        print_note(f"\n#### Model performance over time")  
+        print_note(f"\n##### RMSE")  
+        ModelStabilityPlot(Observed_Predicted_df,scale,PlotTitle)
+
+        #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
+        print_note(f"\n##### Similarity")
+        discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
+        time_weighted_score_plot(Observed_Predicted_all,discount_factor,PlotTitle)
 
     AllMetrics_df = pd.DataFrame()
         
@@ -1127,7 +1124,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
             if (SpecificSeries_count > 10):
 
                 PlotTitle_Test = PlotTitle_series + " - Prospective Validation Set"
-                print_note(f"\n#### Predicted vs Experimental Values for Series: {series}")
+                print_note(f"\n#### Predicted vs Experimental Values (prospective) for Series: {series}")
                 ScatterPlot(Series_df,DesiredProjectThreshold,scale,PlotTitle_Test)
             
                 #Call the thresh function to get the threshold ranges for calculating the various metrics
@@ -1190,11 +1187,8 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 #Sort the metrics data frame before plotting to have the thresholds in ascending order in x-axis
                 AllMetrics_df_sorted = AllMetrics_df.sort_values(by=['Threshold'],ascending = False) 
 
-                print_note(f"\n#### Model performance over time for Series: {series}")  
-                ModelStabilityPlot(Series_df,scale,PlotTitle_series)
-
                 #Training set scatter plots
-                print_note(f"\n #### Training set metrics for Series: {series}")
+                print_note(f"\n #### Predicted vs Experimental Values (training set) for Series: {series}")
 
                 if (Training_SpecificSeries_count>0):
                     PlotTitle_Train = PlotTitle_series + " - Training Set"
@@ -1202,6 +1196,16 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 
                 else:
                     print(Fore.RED + 'Training set is empty - Not possible to generate scatter plots or compute any metrics!' + Fore.RESET)
+
+                print_note(f"\n#### Model performance over time for Series: {series}")
+                print_note(f"\n##### RMSE for Series: {series}")
+                ModelStabilityPlot(Series_df,scale,PlotTitle_series)
+
+                #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
+                print_note(f"\n##### Similarity for Series: {series}")
+                discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
+                time_weighted_score_plot(Series_all_df,discount_factor,PlotTitle_series)
+
     
                 if ((SpecificSeries_count !=0) and (SpecificSeries_count < 20)):
                     print('\n')
@@ -1217,18 +1221,11 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
 
                 LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle_series)
                 
-                #Calculating time dependant MPO scores/ Displaying the different similarity/correlation scores(Actual vs time-weighted)        
-                print_note(f"\n##### Time dependant Similarity, Correlation scores for Series {series}")
-                discount_factor = 0.9 #A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
-                time_weighted_score_plot(Series_all_df,discount_factor,PlotTitle_series)
-                
                 
             else:
                 print('\n')
                 print_note(f"\n --- \n ### Predicted vs Experimental Values for Series {series}")
                 ScatterPlot(Series_df,DesiredProjectThreshold,scale,PlotTitle_series)
                 print(Fore.RED+'Less than 10 compounds with measured values in the prospective validation set for series: '+ series + '! Not possible to compute any metrics!'+Fore.RESET)
-
-            
 
     return
