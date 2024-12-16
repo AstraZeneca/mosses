@@ -30,6 +30,8 @@ from scipy.stats import gmean
 
 from scipy.signal import savgol_filter
 from IPython.core.display import display_markdown, display_html
+import warnings
+warnings.filterwarnings('ignore')
 
 plt.ioff()
 
