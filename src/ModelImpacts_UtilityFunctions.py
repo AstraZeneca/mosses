@@ -30,8 +30,6 @@ from scipy.stats import gmean
 
 from scipy.signal import savgol_filter
 from IPython.core.display import display_markdown, display_html
-import warnings
-warnings.filterwarnings('ignore')
 
 plt.ioff()
 
@@ -1022,7 +1020,7 @@ def PredictiveValidity(Data,observed_column,predicted_column,trainingSet_Column,
         print_note(f"\n#### What predicted threshold gives best enrichment?")
         LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle)
 
-        print_note(f"\n#### Explore other experimental thresholds to aim for")
+        print_note(f"\n#### Explore other experimental thresholds")
         LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,Compounds_TestSet,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle)
 
     else:
@@ -1219,7 +1217,7 @@ def PredictiveValidity_Series(Data,observed_column,predicted_column,trainingSet_
                 print_note(f"\n##### What predicted threshold gives best enrichment for Series: {series}")
                 LikelihoodPlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.Pred_Pos_Likelihood,AllMetrics_df_sorted.Pred_Neg_Likelihood,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,PosClass,Desired_Threshold_df,scale,PlotTitle_series)
  
-                print_note(f"\n#### Explore other experimental thresholds to aim for Series: {series}")
+                print_note(f"\n#### Explore other experimental thresholds for Series: {series}")
 
                 LinePlot(AllMetrics_df_sorted.Threshold,AllMetrics_df_sorted['CompoundsTested'],AllMetrics_df_sorted.PPV,AllMetrics_df_sorted.CompoundsDiscarded,DesiredProjectThreshold,SpecificSeries_count,min_thresh,max_thresh,class_annotation,Desired_Threshold_df,scale,PlotTitle_series)
                 
