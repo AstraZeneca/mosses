@@ -50,12 +50,12 @@ def print_metrics_table(pearson_r2, r2, rmse):
 | Metric | Value |
 | ------ | ----- |
 | Experimental vs Predicted correlation (Coefficient of determination, R2) | {r2} |
-| Root Mean Squared Error (RMSE) | {rmse} |
+| Root Mean Squared Error (RMSE in log scale) | {rmse} |
 
 """, raw=True)
     else:
         print(f"Experimental vs Predicted correlation (Coefficient of determination, R2): {r2}")
-        print(f"Root Mean Squared Error (RMSE): {rmse}")
+        print(f"Root Mean Squared Error (RMSE in log scale): {rmse}")
 
 def print_cpds_info_table(TotalCpds, TrainingSet, TestSet,Compounds_BelowThresh, Compounds_AboveThresh, ratio_GoodCpds):
     if is_in_notebook():
@@ -646,8 +646,8 @@ def LikelihoodPlot(Threshold,Obs,Pred_Pos_Likelihood,Pred_Neg_Likelihood,Desired
                 Line2D([], [], color='grey', linestyle='solid')]
     
     #Rec_Threshold_label =  'Recommended Experimental Threshold: '+ Pos_class +  str(Max_Thresh)
-    Likelihood_Pos_label = 'Likelihood to extract good compounds at the pre-selected experimental threshold'
-    Likelihood_Neg_label = 'Likelihood to discard good compounds at the pre-selected experimental threshold'
+    Likelihood_Pos_label = 'Likelihood to extract good compounds according to pre-selected experimental threshold'
+    Likelihood_Neg_label = 'Likelihood to discard good compounds according to pre-selected experimental threshold'
     ax.legend(handles=myHandle, labels = [Threshold_label,Likelihood_Pos_label,Likelihood_Neg_label,'% of compounds tested (cumulative)'], bbox_to_anchor=(0.5, -0.2),loc='upper center',fontsize=7)
     plt.tight_layout()
     plt.show()
@@ -736,10 +736,10 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
     df2 = df2.dropna(how='any')
     df2['RegDate_Month_Year'] = pd.to_datetime(df2.index)
     df2_sorted = df2.sort_values(by='RegDate_Month_Year').reset_index()
-    df2_sorted = df2_sorted[df2_sorted['RegDate_Month_Year'] >= '01-01-2021'] # Consider only the data corresponding to last 3 years
+    #df2_sorted = df2_sorted[df2_sorted['RegDate_Month_Year'] >= '01-01-2021'] # Consider only the data corresponding to last 3 years
     
-    df2_sorted = df2_sorted[df2_sorted.NoOfCpds >=5] #Consider only those means and SDs computed based on atleast 5 compounds
-
+    df2_sorted = df2_sorted[df2_sorted.NoOfCpds >=2] #Consider only those medians computed based on atleast 2 compounds
+    
     
     #Plot Median experimental values / No. of compounds against the Sample Registration Date
     if scale == 'log':
@@ -755,7 +755,7 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             #ax2.plot(df2_sorted.Month_Year,df2_sorted.NoOfCpds,color='grey',marker="o")
                 
             ax.set_xlabel('Sample Registration Date',fontweight='bold')
-            ax.set_ylabel('Experimental values - Median',fontweight='bold')
+            ax.set_ylabel('Experimental values',fontweight='bold')
             #ax2.set_ylabel('No. of compounds',fontweight='bold')
 
             
@@ -772,7 +772,7 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             ax.set_yticklabels(new_y_ticks, rotation = 45,fontsize=8)
             ax.axhline(y=np.log10(DesiredProjectThreshold),color='orangered',linestyle='dotted')
             
-            PlotTitle_Stability = PlotTitle + ' - Experimental values over time'
+            PlotTitle_Stability = PlotTitle + ' - Median experimental values per month'
             ax.set_title(PlotTitle_Stability)
             plt.rc('xtick',labelsize=8)
             plt.rc('ytick',labelsize=8)
@@ -789,7 +789,7 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             
         else:
             print('\n')
-            print(Fore.RED+"No sufficient data beyond Jan 2021 to track experimental values for " + PlotTitle + " over time!"+Fore.RESET)
+            print(Fore.RED+"No sufficient data to track experimental values for " + PlotTitle + " over time!"+Fore.RESET)
     else:
         #df2_sorted = df2_sorted[((df2_sorted.Median_Exp-df2_sorted['Min']) > 0) & ((df2_sorted['Max']-df2_sorted.Median_Exp) >0)]#Make sure to check if the difference between the mean and min/max values are positive; Negative values are not accepted, while plotting error bars
         if len(df2_sorted) >1:
@@ -834,7 +834,7 @@ def Exp_Values_Dist(df,DesiredProjectThreshold,scale,PlotTitle):
             plt.show()
         else:
             print('\n')
-            print(Fore.RED+"No sufficient data beyond Jan 2021 to track experimental values for " + PlotTitle + " over time!"+Fore.RESET)
+            print(Fore.RED+"No sufficient data to track experimental values for " + PlotTitle + " over time!"+Fore.RESET)
 
  
 '''    
