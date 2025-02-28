@@ -9,6 +9,8 @@ from core.helpers import (
     print_unbiased_ppv_for_table,
 )
 from colorama import Fore
+import warnings
+warnings.filterwarnings('ignore')
 
 def calculate_and_plot(
     all_df: pd.DataFrame,

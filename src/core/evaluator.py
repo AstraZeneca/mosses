@@ -223,9 +223,9 @@ class PredictiveValidityEvaluator:
         """
         df = self.df.copy()
         if series:
-            all_df = df[df[self.series_column] == series]
+            df = df[df[self.series_column] == series]
 
-        train_df, test_df = self.split_train_test(all_df)
+        train_df, test_df = self.split_train_test(df)
         train_count = len(train_df)
         test_count = len(test_df)
 
@@ -241,7 +241,7 @@ class PredictiveValidityEvaluator:
         )
 
         return EvaluatedData(
-            all_df=all_df,
+            all_df=df,
             train_df=train_df,
             test_df=test_df,
             train_count=train_count,
