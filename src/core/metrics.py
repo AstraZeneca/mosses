@@ -522,31 +522,30 @@ def compute_likelihood_metrics(
             filt_pred_pos,
             filt_pred_neg,
         )
+        likelihood_value_for_nan = 'N/A'
+
+        desired_threshold_df['pred_pos_likelihood'] = likelihood_value_for_nan if math.isnan(
+            desired_threshold_df['pred_pos_likelihood']
+        ) else int(desired_threshold_df['pred_pos_likelihood'])
+
+        desired_threshold_df['pred_neg_likelihood'] = likelihood_value_for_nan if math.isnan(
+            desired_threshold_df['pred_neg_likelihood']
+        ) else int(desired_threshold_df['pred_neg_likelihood'])
     else:
         max_dist, max_thresh, max_ppv, max_for = longest_arrow(
             threshold,
             filt_pred_pos,
             filt_pred_neg,
         )
+        likelihood_value_for_nan = 0
 
-    try:
-        desired_pred_pos = (
-            'N/A' if math.isnan(
-                desired_threshold_df['pred_pos_likelihood'].iloc[0]
-            )
-            else int(desired_threshold_df['pred_pos_likelihood'].iloc[0])
-        )
-        desired_pred_neg = (
-            'N/A' if math.isnan(
-                desired_threshold_df['pred_neg_likelihood'].iloc[0]
-            )
-            else int(desired_threshold_df['pred_neg_likelihood'].iloc[0])
-        )
-    except Exception:
-        raise ValueError(
-            "desired_threshold_df must contain 'pred_pos_likelihood' "
-            "and 'pred_neg_likelihood' with at least one row."
-        )
+        desired_threshold_df['pred_pos_likelihood'] = likelihood_value_for_nan if math.isnan(
+            desired_threshold_df['pred_pos_likelihood']
+        ) else int(desired_threshold_df['pred_pos_likelihood'])
+
+        desired_threshold_df['pred_neg_likelihood'] = likelihood_value_for_nan if math.isnan(
+            desired_threshold_df['pred_neg_likelihood']
+        ) else int(desired_threshold_df['pred_neg_likelihood'])
 
     return LikelihoodMetrics(
         filtered_pred_pos=filt_pred_pos,
@@ -556,8 +555,8 @@ def compute_likelihood_metrics(
             max_dist, max_thresh, -1 if max_ppv == -1 else int(max_ppv),
             -1 if max_for == -1 else int(max_for)
         ),
-        desired_pred_pos=desired_pred_pos,
-        desired_pred_neg=desired_pred_neg
+        desired_pred_pos=desired_threshold_df['pred_pos_likelihood'][0],
+        desired_pred_neg=desired_threshold_df['pred_neg_likelihood'][0],
     )
 
 

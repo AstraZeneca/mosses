@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from colorama import Fore
-from core.helpers import print_metrics_table
 from core.metrics import LikelihoodMetrics, LinePlotMetrics, ScatterMetrics
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
@@ -350,17 +349,6 @@ class Plotter:
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(new_y_ticks, rotation=45)
 
-        if scatter_metrics:
-            print_metrics_table(
-                r2=scatter_metrics.r2,
-                rmse=scatter_metrics.rmse,
-            )
-        else:
-            print(
-                f"{Fore.RED}Less than 10 compounds to "
-                f"compute R2 and RMSEs!{Fore.RESET}"
-            )
-
         ax.set_xlabel('Predicted', fontweight='bold')
         ax.set_ylabel('xperimental', fontweight='bold')
         ax.set_title(plot_title)
@@ -404,17 +392,6 @@ class Plotter:
         )
         ax.axhline(y=desired_threshold, color='orangered', linestyle='dotted')
         ax.axvline(x=desired_threshold, color='orangered', linestyle='dotted')
-
-        if scatter_metrics:
-            print_metrics_table(
-                r2=scatter_metrics.r2,
-                rmse=scatter_metrics.rmse,
-            )
-        else:
-            print(
-                f"{Fore.RED}Less than 10 compounds to "
-                f"compute R2 and RMSEs!{Fore.RESET}"
-            )
 
         ax.set_xlabel('Predicted', fontweight='bold')
         ax.set_ylabel('Experimental', fontweight='bold')

@@ -7,6 +7,7 @@ from core.helpers import (
     print_cpds_info_table,
     print_ppv_for_table,
     print_unbiased_ppv_for_table,
+    print_metrics_table,
 )
 from colorama import Fore
 import warnings
@@ -70,11 +71,19 @@ def calculate_and_plot(
         print_note(f"\n#### Predicted vs Experimental Values (prospective) {series_title_postfix}")
         if len(all_df['observed']) > 0 and len(all_df['predicted']) > 0:
             scatter_metrics_plot_title = f'{plot_title} - Prospective Validation Set'
-            scatter_metrics = None
-            if total_compound_num >= 10:
-                scatter_metrics = metrics_calculator.compute_scatter_metrics(
-                    df=evaluated_data.test_df,
-                    scale=plot_scale,
+            scatter_metrics = metrics_calculator.compute_scatter_metrics(
+                df=evaluated_data.test_df,
+                scale=plot_scale,
+            )
+            if evaluated_data.test_count >= 10:
+                print_metrics_table(
+                    r2=scatter_metrics.r2,
+                    rmse=scatter_metrics.rmse,
+                )
+            else:
+                print(
+                    f"{Fore.RED}Less than 10 compounds to "
+                    f"compute R2 and RMSEs!{Fore.RESET}"
                 )
 
             plotter.scatter_plot(
@@ -88,14 +97,23 @@ def calculate_and_plot(
 
 
     # ============== 2.2 training metrics ===================
-    if evaluated_data.train_count > 0 and total_compound_num >= 10:
-        print_note(f"\n #### Predicted vs Experimental Values (training set) {series_title_postfix}")
+    print_note(f"\n #### Predicted vs Experimental Values (training set) {series_title_postfix}")
+    if evaluated_data.train_count > 0:
         scatter_metrics_plot_title = f'{plot_title} - Training Set'
-        scatter_metrics = None
         scatter_metrics = metrics_calculator.compute_scatter_metrics(
             df=evaluated_data.train_df,
             scale=plot_scale,
         )
+        if evaluated_data.train_count >= 10:
+            print_metrics_table(
+                r2=scatter_metrics.r2,
+                rmse=scatter_metrics.rmse,
+            )
+        else:
+            print(
+                f"{Fore.RED}Less than 10 compounds to "
+                f"compute R2 and RMSEs!{Fore.RESET}"
+            )
         plotter.scatter_plot(
             df=evaluated_data.train_df,
             desired_threshold=current_threshold,
