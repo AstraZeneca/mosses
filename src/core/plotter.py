@@ -80,10 +80,11 @@ class Plotter:
         )
         ax.xaxis.set_ticks(xlims)
         x_ticks = ax.get_xticks()
-        new_x_ticks = [
-            round(10 ** x, 2) if x < 0 else int(10 ** x)
-            for x in x_ticks
-        ]
+        if (x_ticks<0).any():
+            new_x_ticks = [round((10 ** x),2) for x in x_ticks]
+        else:
+            new_x_ticks = [int(10 ** x) for x in x_ticks]
+        ax.set_xticks(x_ticks)
         ax.set_xticklabels(new_x_ticks, rotation=45)
         return ax
 
@@ -124,17 +125,16 @@ class Plotter:
         y_min = observed_log.min() - 0.5
         y_max = observed_log.max() + 0.5
         ylims = np.arange(y_min, y_max, 0.5)
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_ylim(y_min, y_max)
         ax.yaxis.set_ticks(ylims)
 
         ax.set_xticklabels(agg_df['month_year'], rotation=90, fontsize=8)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
         y_ticks = ax.get_yticks()
         new_y_ticks = [int(10 ** y) for y in y_ticks]
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(new_y_ticks, rotation=45, fontsize=8)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax.axhline(
             y=np.log10(desired_threshold),
             color='orangered',
@@ -195,12 +195,12 @@ class Plotter:
         ylims = np.arange(y_min, y_max, inc)
         ax.plot(agg_df['month_year'], agg_df['median_exp'],
                 marker='o', color='dodgerblue')
-        ax.set_ylim(y_min, y_max)
         ax.set_xlabel('Sample Registration Date', fontweight='bold')
         ax.set_ylabel('Experimental values - Median', fontweight='bold')
 
         ax.set_xticklabels(agg_df['month_year'], rotation=90)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_ylim(y_min, y_max)
         ax.yaxis.set_ticks(ylims)
 
         y_ticks = ax.get_yticks()
@@ -282,7 +282,6 @@ class Plotter:
         df: pd.DataFrame,
         desired_threshold: float,
         plot_title: str,
-        scatter_metrics: ScatterMetrics | None,
     ) -> None:
         """
         Create a scatter plot of predicted vs.
@@ -350,7 +349,7 @@ class Plotter:
         ax.set_yticklabels(new_y_ticks, rotation=45)
 
         ax.set_xlabel('Predicted', fontweight='bold')
-        ax.set_ylabel('xperimental', fontweight='bold')
+        ax.set_ylabel('Experimental', fontweight='bold')
         ax.set_title(plot_title)
         plt.rc('xtick', labelsize=8)
         plt.rc('ytick', labelsize=8)
@@ -362,7 +361,6 @@ class Plotter:
         df: pd.DataFrame,
         desired_threshold: float,
         plot_title: str,
-        scatter_metrics: ScatterMetrics | None,
     ) -> None:
         """
         Create a scatter plot of predicted vs.
@@ -588,7 +586,7 @@ class Plotter:
                     xytext=(max_thresh, max_ppv),
                     arrowprops=dict(arrowstyle='<->', color='plum'),
                 )
-                if metrics.desired_pred_pos != 'N/A':
+                if metrics.desired_pred_pos != 'N/A' and metrics.desired_pred_neg != 'N/A':
                     plt.annotate(
                         text='',
                         xy=(
@@ -637,14 +635,21 @@ class Plotter:
                     xytext=(max_thresh, max_ppv),
                     arrowprops=dict(arrowstyle='<->', color='plum'),
                 )
-                plt.annotate(
-                    text='',
-                    xy=(desired_threshold, metrics.desired_pred_neg),
-                    xytext=(desired_threshold, metrics.desired_pred_pos),
-                    arrowprops=dict(arrowstyle='<->', color='green'),
-                )
+                if metrics.desired_pred_pos != 'N/A' and metrics.desired_pred_neg != 'N/A':
+                    plt.annotate(
+                        text='',
+                        xy=(desired_threshold, metrics.desired_pred_neg),
+                        xytext=(desired_threshold, metrics.desired_pred_pos),
+                        arrowprops=dict(arrowstyle='<->', color='green'),
+                    )
+
             ax2 = ax.twinx()
-            ax2.plot(threshold, metrics.obs, color="grey", marker="o")
+            ax2.plot(
+                threshold,
+                metrics.obs,
+                color="grey",
+                marker="o",
+            )
 
         ax.set_xlabel('Predicted threshold', fontweight='bold')
         ax.set_ylabel(
@@ -824,7 +829,6 @@ class Plotter:
         df: pd.DataFrame,
         desired_threshold: float,
         plot_title: str,
-        scatter_metrics: ScatterMetrics | None,
     ) -> None:
         """
         Generate a scatter plot comparing predicted
@@ -851,12 +855,10 @@ class Plotter:
                 df,
                 desired_threshold,
                 plot_title,
-                scatter_metrics,
             )
         else:
             self._scatter_plot_linear(
                 df,
                 desired_threshold,
                 plot_title,
-                scatter_metrics,
             )

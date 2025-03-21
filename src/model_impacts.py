@@ -90,7 +90,6 @@ def calculate_and_plot(
                 df=evaluated_data.test_df,
                 desired_threshold=current_threshold,
                 plot_title=scatter_metrics_plot_title,
-                scatter_metrics=scatter_metrics,
             )
         else:
             print(f"{Fore.RED}No sufficient datapoints to generate plots {series_title_postfix}!{Fore.RESET}")
@@ -118,7 +117,6 @@ def calculate_and_plot(
             df=evaluated_data.train_df,
             desired_threshold=current_threshold,
             plot_title=scatter_metrics_plot_title,
-            scatter_metrics=scatter_metrics,
         )
     else:
         print(
@@ -232,7 +230,6 @@ def calculate_and_plot(
             df=evaluated_data.test_df,
             desired_threshold=current_threshold,
             plot_title=scatter_metrics_plot_title,
-            scatter_metrics=scatter_metrics,
         )
         print(
             f'{Fore.RED}Less than 10 compounds with measured values'
