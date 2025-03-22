@@ -25,14 +25,10 @@ def calculate_and_plot(
     plot_scale: str,
     series: str | None = None,
 ):
-    if evaluated_data.test_count > 0:
-        _, _, thresholds_selection = metrics_calculator.thresh_selection(
-            preds=evaluated_data.test_df['predicted'],
-            desired_threshold=current_threshold,
-            scale=plot_scale,
-        )
+    if (evaluated_data.test_count > 0 and series is None) or (
+        len(evaluated_data.all_df) != 0 and series is not None
+    ):
         total_compound_num = evaluated_data.test_count + evaluated_data.train_count
-
         series_title_postfix = f'for Series: {series}' if series else ''
         plot_title = f'{plot_title} (Series: {series})' if series else ''
         print_note(
@@ -167,6 +163,11 @@ def calculate_and_plot(
 
     # ============ 3. threshold metrics and model usage advice ===============
     if evaluated_data.test_count >= 10:
+        _, _, thresholds_selection = metrics_calculator.thresh_selection(
+            preds=evaluated_data.test_df['predicted'],
+            desired_threshold=current_threshold,
+            scale=plot_scale,
+        )
         threshold_metrics = metrics_calculator.compute_threshold_metrics(
             df=evaluated_data.test_df,
             thresholds=thresholds_selection,
