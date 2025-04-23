@@ -30,7 +30,7 @@ def calculate_and_plot(
     ):
         total_compound_num = evaluated_data.test_count + evaluated_data.train_count
         series_title_postfix = f'for Series: {series}' if series else ''
-        plot_title = f'{plot_title} (Series: {series})' if series else ''
+        plot_title = f'{plot_title} (Series: {series})' if series else plot_title
         print_note(
             f"\n ### Overview {series_title_postfix}\n ---"
         )
