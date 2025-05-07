@@ -4,13 +4,14 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from colorama import Fore
-from core.metrics import LikelihoodMetrics, LinePlotMetrics, ScatterMetrics
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
+from mosses.core.metrics import LikelihoodMetrics
+from mosses.core.metrics import LinePlotMetrics
 
 
 class Plotter:
-    def __init__(self, scale: str = 'log') -> None:
+    def __init__(self, scale: str = "log") -> None:
         """
         Initialize the Plotter.
 
@@ -80,10 +81,10 @@ class Plotter:
         )
         ax.xaxis.set_ticks(xlims)
         x_ticks = ax.get_xticks()
-        if (x_ticks<0).any():
-            new_x_ticks = [round((10 ** x),2) for x in x_ticks]
+        if (x_ticks < 0).any():
+            new_x_ticks = [round((10**x), 2) for x in x_ticks]
         else:
-            new_x_ticks = [int(10 ** x) for x in x_ticks]
+            new_x_ticks = [int(10**x) for x in x_ticks]
         ax.set_xticks(x_ticks)
         ax.set_xticklabels(new_x_ticks, rotation=45)
         return ax
@@ -115,13 +116,13 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(6, 6))
         fig.canvas.header_visible = False
         ax.plot(
-            agg_df['month_year'],
-            np.log10(agg_df['median_exp']),
-            marker='o',
-            color='dodgerblue',
+            agg_df["month_year"],
+            np.log10(agg_df["median_exp"]),
+            marker="o",
+            color="dodgerblue",
         )
 
-        observed_log = np.log10(df['observed'])
+        observed_log = np.log10(df["observed"])
         y_min = observed_log.min() - 0.5
         y_max = observed_log.max() + 0.5
         ylims = np.arange(y_min, y_max, 0.5)
@@ -129,36 +130,36 @@ class Plotter:
         ax.set_ylim(y_min, y_max)
         ax.yaxis.set_ticks(ylims)
 
-        ax.set_xticklabels(agg_df['month_year'], rotation=90, fontsize=8)
+        ax.set_xticklabels(agg_df["month_year"], rotation=90, fontsize=8)
 
         y_ticks = ax.get_yticks()
-        new_y_ticks = [int(10 ** y) for y in y_ticks]
+        new_y_ticks = [int(10**y) for y in y_ticks]
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(new_y_ticks, rotation=45, fontsize=8)
         ax.axhline(
             y=np.log10(desired_threshold),
-            color='orangered',
-            linestyle='dotted',
+            color="orangered",
+            linestyle="dotted",
         )
 
-        ax.set_xlabel('Sample Registration Date', fontweight='bold')
-        ax.set_ylabel('Experimental values', fontweight='bold')
+        ax.set_xlabel("Sample Registration Date", fontweight="bold")
+        ax.set_ylabel("Experimental values", fontweight="bold")
 
-        ax.set_title(f'{plot_title} - Experimental values per month')
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        ax.set_title(f"{plot_title} - Experimental values per month")
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
         handles = [
-            Line2D([], [], color='dodgerblue'),
-            Line2D([], [], color='orange', linestyle=':')
+            Line2D([], [], color="dodgerblue"),
+            Line2D([], [], color="orange", linestyle=":"),
         ]
         ax.legend(
             handles,
             [
-                'Median experimental values during each time period',
-                'Desired project threshold'
+                "Median experimental values during each time period",
+                "Desired project threshold",
             ],
             bbox_to_anchor=(0.5, -0.3),
-            loc='upper center',
+            loc="upper center",
             fontsize=7,
         )
         fig.tight_layout()
@@ -189,16 +190,17 @@ class Plotter:
         """
         fig, ax = plt.subplots(figsize=(6, 6))
         fig.canvas.header_visible = False
-        inc = (df['observed'].max() - df['observed'].min()) / 5
-        y_min = df['observed'].min() - inc
-        y_max = df['observed'].max() + inc
+        inc = (df["observed"].max() - df["observed"].min()) / 5
+        y_min = df["observed"].min() - inc
+        y_max = df["observed"].max() + inc
         ylims = np.arange(y_min, y_max, inc)
-        ax.plot(agg_df['month_year'], agg_df['median_exp'],
-                marker='o', color='dodgerblue')
-        ax.set_xlabel('Sample Registration Date', fontweight='bold')
-        ax.set_ylabel('Experimental values - Median', fontweight='bold')
+        ax.plot(
+            agg_df["month_year"], agg_df["median_exp"], marker="o", color="dodgerblue"
+        )
+        ax.set_xlabel("Sample Registration Date", fontweight="bold")
+        ax.set_ylabel("Experimental values - Median", fontweight="bold")
 
-        ax.set_xticklabels(agg_df['month_year'], rotation=90)
+        ax.set_xticklabels(agg_df["month_year"], rotation=90)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_ylim(y_min, y_max)
         ax.yaxis.set_ticks(ylims)
@@ -207,23 +209,23 @@ class Plotter:
         new_y_ticks = [round(y, 1) for y in y_ticks]
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(new_y_ticks, rotation=45)
-        ax.axhline(y=desired_threshold, color='orangered', linestyle='dotted')
+        ax.axhline(y=desired_threshold, color="orangered", linestyle="dotted")
 
-        ax.set_title(f'{plot_title} - Experimental values over time')
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        ax.set_title(f"{plot_title} - Experimental values over time")
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
         handles = [
-            Line2D([], [], color='dodgerblue'),
-            Line2D([], [], color='orange', linestyle=':')
+            Line2D([], [], color="dodgerblue"),
+            Line2D([], [], color="orange", linestyle=":"),
         ]
         ax.legend(
             handles,
             [
-                'Median experimental values during each time period',
-                'Desired project threshold'
+                "Median experimental values during each time period",
+                "Desired project threshold",
             ],
             bbox_to_anchor=(0.5, -0.3),
-            loc='upper center',
+            loc="upper center",
             fontsize=7,
         )
         fig.tight_layout()
@@ -262,7 +264,7 @@ class Plotter:
             )
             return
 
-        if self.scale == 'log':
+        if self.scale == "log":
             self._plot_log_exp_values_dist(
                 agg_df,
                 df,
@@ -299,8 +301,8 @@ class Plotter:
             Metrics (e.g., R2 and RMSE) to be printed.
             If None, a warning is shown.
         """
-        df['log_predicted'] = np.log10(df['predicted'])
-        df['log_observed'] = np.log10(df['observed'])
+        df["log_predicted"] = np.log10(df["predicted"])
+        df["log_observed"] = np.log10(df["observed"])
 
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
@@ -308,51 +310,51 @@ class Plotter:
             data=df,
             x="log_predicted",
             y="log_observed",
-            color='grey',
+            color="grey",
             ci=None,
             ax=ax,
         )
 
         ax.axhline(
             y=np.log10(desired_threshold),
-            color='orangered',
-            linestyle='dotted',
+            color="orangered",
+            linestyle="dotted",
         )
         ax.axvline(
             x=np.log10(desired_threshold),
-            color='orangered',
-            linestyle='dotted',
+            color="orangered",
+            linestyle="dotted",
         )
-        ax.set_xlim(0, max(np.log10(df['predicted'])))
-        ax.set_ylim(0, max(np.log10(df['observed'])))
+        ax.set_xlim(0, max(np.log10(df["predicted"])))
+        ax.set_ylim(0, max(np.log10(df["observed"])))
 
-        ax = Plotter.reset_x_ticks(df['predicted'], ax)
+        ax = Plotter.reset_x_ticks(df["predicted"], ax)
 
         ylims = np.arange(
-            min(np.log10(df['observed'])) - 0.5,
-            max(np.log10(df['observed'])) + 0.5,
+            min(np.log10(df["observed"])) - 0.5,
+            max(np.log10(df["observed"])) + 0.5,
             0.5,
         )
         ax.set_ylim(
-            min(np.log10(df['observed'])) - 0.5,
-            max(np.log10(df['observed'])) + 0.5,
+            min(np.log10(df["observed"])) - 0.5,
+            max(np.log10(df["observed"])) + 0.5,
         )
         ax.yaxis.set_ticks(ylims)
 
         y_ticks = ax.get_yticks()
         if (y_ticks < 0).any():
-            new_y_ticks = [round(10 ** y, 2) for y in y_ticks]
+            new_y_ticks = [round(10**y, 2) for y in y_ticks]
         else:
-            new_y_ticks = [int(10 ** y) for y in y_ticks]
+            new_y_ticks = [int(10**y) for y in y_ticks]
 
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(new_y_ticks, rotation=45)
 
-        ax.set_xlabel('Predicted', fontweight='bold')
-        ax.set_ylabel('Experimental', fontweight='bold')
+        ax.set_xlabel("Predicted", fontweight="bold")
+        ax.set_ylabel("Experimental", fontweight="bold")
         ax.set_title(plot_title)
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
         plt.tight_layout()
         plt.show()
 
@@ -384,18 +386,18 @@ class Plotter:
             data=df,
             x="predicted",
             y="observed",
-            color='grey',
+            color="grey",
             ci=None,
             ax=ax,
         )
-        ax.axhline(y=desired_threshold, color='orangered', linestyle='dotted')
-        ax.axvline(x=desired_threshold, color='orangered', linestyle='dotted')
+        ax.axhline(y=desired_threshold, color="orangered", linestyle="dotted")
+        ax.axvline(x=desired_threshold, color="orangered", linestyle="dotted")
 
-        ax.set_xlabel('Predicted', fontweight='bold')
-        ax.set_ylabel('Experimental', fontweight='bold')
+        ax.set_xlabel("Predicted", fontweight="bold")
+        ax.set_ylabel("Experimental", fontweight="bold")
         ax.set_title(plot_title)
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
         plt.tight_layout()
         plt.show()
 
@@ -405,7 +407,7 @@ class Plotter:
         obs: np.ndarray,
         metrics: LinePlotMetrics,
         test_count: int,
-        plot_title: str
+        plot_title: str,
     ) -> None:
         """
         Plot a line chart of threshold metrics using precomputed metrics.
@@ -427,17 +429,17 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
 
-        if self.scale == 'log':
+        if self.scale == "log":
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_metric1,
-                color='blue',
+                color="blue",
                 marker="o",
             )
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_metric2,
-                color='orange',
+                color="orange",
                 marker="o",
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
@@ -448,10 +450,10 @@ class Plotter:
             ):
                 _, max_thresh, max_ppv, max_for = metrics.arrow
                 plt.annotate(
-                    text='',
+                    text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle='<->', color='plum'),
+                    arrowprops=dict(arrowstyle="<->", color="plum"),
                 )
 
             ax2 = ax.twinx()
@@ -469,13 +471,13 @@ class Plotter:
             ax.plot(
                 threshold,
                 metrics.filtered_metric1,
-                color='blue',
+                color="blue",
                 marker="o",
             )
             ax.plot(
                 threshold,
                 metrics.filtered_metric2,
-                color='orange',
+                color="orange",
                 marker="o",
             )
 
@@ -485,40 +487,40 @@ class Plotter:
             ):
                 _, max_thresh, max_ppv, max_for = metrics.arrow
                 plt.annotate(
-                    text='',
+                    text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle='<->', color='plum'),
+                    arrowprops=dict(arrowstyle="<->", color="plum"),
                 )
             ax2 = ax.twinx()
             ax2.plot(threshold, obs, color="grey", marker="o")
 
-        ax.set_xlabel('Predicted threshold', fontweight='bold')
-        ax.set_ylabel('PPV & FOR (unbiased) - Likelihood% ', fontweight='bold')
-        ax2.set_ylabel('% of compounds tested', fontweight='bold')
+        ax.set_xlabel("Predicted threshold", fontweight="bold")
+        ax.set_ylabel("PPV & FOR (unbiased) - Likelihood% ", fontweight="bold")
+        ax2.set_ylabel("% of compounds tested", fontweight="bold")
         ax = Plotter.reset_y_ticks(ax)
         ax2 = Plotter.reset_y_ticks(ax2)
         ax.set_title(plot_title)
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
         if test_count < 20:
-            ax.set_facecolor('lemonchiffon')
+            ax.set_facecolor("lemonchiffon")
 
         my_handle = [
-            Line2D([], [], color='blue', linestyle='solid'),
-            Line2D([], [], color='orange', linestyle='solid'),
-            Line2D([], [], color='grey', linestyle='solid')
+            Line2D([], [], color="blue", linestyle="solid"),
+            Line2D([], [], color="orange", linestyle="solid"),
+            Line2D([], [], color="grey", linestyle="solid"),
         ]
         ax.legend(
             handles=my_handle,
             labels=[
-                'Likelihood to extract good compounds at each '
-                'predicted threshold',
-                'Likelihood to discard good compounds at each '
-                'predicted threshold',
-                '% of compounds tested (cumulative)',
+                "Likelihood to extract good compounds at each " "predicted threshold",
+                "Likelihood to discard good compounds at each " "predicted threshold",
+                "% of compounds tested (cumulative)",
             ],
-            bbox_to_anchor=(0.5, -0.2), loc='upper center', fontsize=7
+            bbox_to_anchor=(0.5, -0.2),
+            loc="upper center",
+            fontsize=7,
         )
         plt.tight_layout()
         plt.show()
@@ -556,39 +558,38 @@ class Plotter:
         fig.canvas.header_visible = False
 
         threshold_label = (
-            f'Selected Experimental Threshold: {pos_class} '
-            f'{desired_threshold}'
+            f"Selected Experimental Threshold: {pos_class} " f"{desired_threshold}"
         )
 
-        if self.scale == 'log':
+        if self.scale == "log":
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_pred_pos,
-                color='turquoise',
+                color="turquoise",
                 marker="o",
             )
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_pred_neg,
-                color='indigo',
+                color="indigo",
                 marker="o",
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
 
-            if (
-                metrics.filtered_pred_pos.size
-                and metrics.filtered_pred_neg.size
-            ):
+            if metrics.filtered_pred_pos.size and metrics.filtered_pred_neg.size:
                 _, max_thresh, max_ppv, max_for = metrics.arrow
                 plt.annotate(
-                    text='',
+                    text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle='<->', color='plum'),
+                    arrowprops=dict(arrowstyle="<->", color="plum"),
                 )
-                if metrics.desired_pred_pos != 'N/A' and metrics.desired_pred_neg != 'N/A':
+                if (
+                    metrics.desired_pred_pos != "N/A"
+                    and metrics.desired_pred_neg != "N/A"
+                ):
                     plt.annotate(
-                        text='',
+                        text="",
                         xy=(
                             np.log10(desired_threshold),
                             metrics.desired_pred_neg,
@@ -597,7 +598,7 @@ class Plotter:
                             np.log10(desired_threshold),
                             metrics.desired_pred_pos,
                         ),
-                        arrowprops=dict(arrowstyle='<->', color='green'),
+                        arrowprops=dict(arrowstyle="<->", color="green"),
                     )
 
             ax2 = ax.twinx()
@@ -615,32 +616,32 @@ class Plotter:
             ax.plot(
                 threshold,
                 metrics.filtered_pred_pos,
-                color='turquoise',
+                color="turquoise",
                 marker="o",
             )
             ax.plot(
                 threshold,
                 metrics.filtered_pred_neg,
-                color='indigo',
+                color="indigo",
                 marker="o",
             )
-            if (
-                metrics.filtered_pred_pos.size
-                and metrics.filtered_pred_neg.size
-            ):
+            if metrics.filtered_pred_pos.size and metrics.filtered_pred_neg.size:
                 _, max_thresh, max_ppv, max_for = metrics.arrow
                 plt.annotate(
-                    text='',
+                    text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle='<->', color='plum'),
+                    arrowprops=dict(arrowstyle="<->", color="plum"),
                 )
-                if metrics.desired_pred_pos != 'N/A' and metrics.desired_pred_neg != 'N/A':
+                if (
+                    metrics.desired_pred_pos != "N/A"
+                    and metrics.desired_pred_neg != "N/A"
+                ):
                     plt.annotate(
-                        text='',
+                        text="",
                         xy=(desired_threshold, metrics.desired_pred_neg),
                         xytext=(desired_threshold, metrics.desired_pred_pos),
-                        arrowprops=dict(arrowstyle='<->', color='green'),
+                        arrowprops=dict(arrowstyle="<->", color="green"),
                     )
 
             ax2 = ax.twinx()
@@ -651,40 +652,40 @@ class Plotter:
                 marker="o",
             )
 
-        ax.set_xlabel('Predicted threshold', fontweight='bold')
+        ax.set_xlabel("Predicted threshold", fontweight="bold")
         ax.set_ylabel(
-            'PPV & FOR (using SET) - Likelihood% ',
-            fontweight='bold',
+            "PPV & FOR (using SET) - Likelihood% ",
+            fontweight="bold",
         )
-        ax2.set_ylabel('% of compounds tested', fontweight='bold')
+        ax2.set_ylabel("% of compounds tested", fontweight="bold")
         ax = Plotter.reset_y_ticks(ax)
         ax2 = Plotter.reset_y_ticks(ax2)
 
         ax.set_title(plot_title)
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
 
         if test_count < 20:
-            ax.set_facecolor('lemonchiffon')
+            ax.set_facecolor("lemonchiffon")
 
         myHandle = [
-            Line2D([], [], color='white'),
-            Line2D([], [], color='turquoise', linestyle='solid'),
-            Line2D([], [], color='indigo', linestyle='solid'),
-            Line2D([], [], color='grey', linestyle='solid')
+            Line2D([], [], color="white"),
+            Line2D([], [], color="turquoise", linestyle="solid"),
+            Line2D([], [], color="indigo", linestyle="solid"),
+            Line2D([], [], color="grey", linestyle="solid"),
         ]
         ax.legend(
             handles=myHandle,
             labels=[
                 threshold_label,
-                'Likelihood to extract good compounds according '
-                'to pre-selected experimental threshold',
-                'Likelihood to discard good compounds according '
-                'to pre-selected experimental threshold',
-                '% of compounds tested (cumulative)',
+                "Likelihood to extract good compounds according "
+                "to pre-selected experimental threshold",
+                "Likelihood to discard good compounds according "
+                "to pre-selected experimental threshold",
+                "% of compounds tested (cumulative)",
             ],
             bbox_to_anchor=(0.5, -0.2),
-            loc='upper center',
+            loc="upper center",
             fontsize=7,
         )
         plt.tight_layout()
@@ -714,8 +715,7 @@ class Plotter:
         """
         if len(t_labels) <= 1 or scores.size == 0:
             print(
-                f"{Fore.RED}No sufficient datapoints to "
-                f"generate plots!{Fore.RESET}"
+                f"{Fore.RED}No sufficient datapoints to " f"generate plots!{Fore.RESET}"
             )
             return
 
@@ -725,33 +725,33 @@ class Plotter:
         ax.plot(
             t_labels,
             scores[:, 0],
-            color='blue',
-            label='Similarity of data',
+            color="blue",
+            label="Similarity of data",
         )
         ax.plot(
             t_labels,
             scores[:, 1],
-            color='orange',
-            label='Similarity of correlation',
+            color="orange",
+            label="Similarity of correlation",
         )
         ax.plot(
             t_labels,
             w_scores[:, 0],
-            color='green',
-            label='Similarity of data (Time-weighted)',
+            color="green",
+            label="Similarity of data (Time-weighted)",
         )
         ax.plot(
             t_labels,
             w_scores[:, 1],
-            color='red',
-            label='Similarity of correlation (Time-weighted)',
+            color="red",
+            label="Similarity of correlation (Time-weighted)",
         )
 
-        ax.set_xlabel('Model version', fontweight='bold')
-        ax.set_ylabel('Scores', fontweight='bold')
+        ax.set_xlabel("Model version", fontweight="bold")
+        ax.set_ylabel("Scores", fontweight="bold")
         ax.set_xticklabels(t_labels, rotation=90)
-        plt.rc('xtick', labelsize=8)
-        plt.rc('ytick', labelsize=8)
+        plt.rc("xtick", labelsize=8)
+        plt.rc("ytick", labelsize=8)
 
         ax.legend(fontsize=7)
         plt.title(plot_title)
@@ -782,42 +782,41 @@ class Plotter:
         ax2 = ax.twinx()
 
         ax.plot(
-            agg_df['model_version'],
-            agg_df['rmse'],
-            color='deeppink',
-            marker='o',
-            label='RMSE',
+            agg_df["model_version"],
+            agg_df["rmse"],
+            color="deeppink",
+            marker="o",
+            label="RMSE",
         )
         ax2.plot(
-            agg_df['model_version'],
-            agg_df['no_of_cpds'],
-            color='grey',
-            marker='o',
-            label='No. of compounds',
+            agg_df["model_version"],
+            agg_df["no_of_cpds"],
+            color="grey",
+            marker="o",
+            label="No. of compounds",
         )
 
         ax.set_ylim(0, 2.5)
-        ax.set_xlabel('Model Version', fontweight='bold')
-        ax.set_ylabel('RMSE (log scale)', fontweight='bold')
-        ax2.set_ylabel('No. of compounds', fontweight='bold')
+        ax.set_xlabel("Model Version", fontweight="bold")
+        ax.set_ylabel("RMSE (log scale)", fontweight="bold")
+        ax2.set_ylabel("No. of compounds", fontweight="bold")
 
-        ax.set_xticklabels(agg_df['model_version'], rotation=90)
+        ax.set_xticklabels(agg_df["model_version"], rotation=90)
         ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        ax.set_title(plot_title + ' - Model performance over time')
+        ax.set_title(plot_title + " - Model performance over time")
         handles = [
-            Line2D([], [], color='deeppink', marker='o', label='RMSE'),
-            Line2D([], [], color='grey', marker='o', label='No. of compounds')
+            Line2D([], [], color="deeppink", marker="o", label="RMSE"),
+            Line2D([], [], color="grey", marker="o", label="No. of compounds"),
         ]
         ax.legend(
             handles=handles,
             labels=[
-                'RMSEs over time',
-                'No. of compounds considered'
-                'for prediction each month'
+                "RMSEs over time",
+                "No. of compounds considered" "for prediction each month",
             ],
             bbox_to_anchor=(0.5, -0.3),
-            loc='upper center',
+            loc="upper center",
             fontsize=7,
         )
 
@@ -850,7 +849,7 @@ class Plotter:
             Metrics (e.g., R2 and RMSE) to be printed.
             If None, a warning is shown.
         """
-        if self.scale == 'log':
+        if self.scale == "log":
             self._scatter_plot_log(
                 df,
                 desired_threshold,

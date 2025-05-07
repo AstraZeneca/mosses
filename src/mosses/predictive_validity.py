@@ -1,17 +1,19 @@
-from core.evaluator import PredictiveValidityEvaluator, EvaluatedData
-from core.plotter import Plotter
-import core.metrics as metrics_calculator
-import pandas as pd
-from core.helpers import (
-    print_note,
-    print_cpds_info_table,
-    print_ppv_for_table,
-    print_unbiased_ppv_for_table,
-    print_metrics_table,
-)
-from colorama import Fore
 import warnings
-warnings.filterwarnings('ignore')
+
+import mosses.core.metrics as metrics_calculator
+import pandas as pd
+from colorama import Fore
+from mosses.core.evaluator import EvaluatedData
+from mosses.core.evaluator import PredictiveValidityEvaluator
+from mosses.core.helpers import print_cpds_info_table
+from mosses.core.helpers import print_metrics_table
+from mosses.core.helpers import print_note
+from mosses.core.helpers import print_ppv_for_table
+from mosses.core.helpers import print_unbiased_ppv_for_table
+from mosses.core.plotter import Plotter
+
+warnings.filterwarnings("ignore")
+
 
 def calculate_and_plot(
     all_df: pd.DataFrame,
@@ -29,11 +31,9 @@ def calculate_and_plot(
         len(evaluated_data.all_df) != 0 and series is not None
     ):
         total_compound_num = evaluated_data.test_count + evaluated_data.train_count
-        series_title_postfix = f'for Series: {series}' if series else ''
-        plot_title = f'{plot_title} (Series: {series})' if series else plot_title
-        print_note(
-            f"\n ### Overview {series_title_postfix}\n ---"
-        )
+        series_title_postfix = f"for Series: {series}" if series else ""
+        plot_title = f"{plot_title} (Series: {series})" if series else plot_title
+        print_note(f"\n ### Overview {series_title_postfix}\n ---")
         print_cpds_info_table(
             total=total_compound_num,
             train_count=evaluated_data.train_count,
@@ -52,21 +52,23 @@ def calculate_and_plot(
         )
         plotter.draw_exp_values_dist(
             agg_df=exp_values_dist,
-            df=all_df,  
+            df=all_df,
             desired_threshold=current_threshold,
             plot_title=plot_title,
         )
 
         print_note(f"\n --- \n ### Model evaluation {series_title_postfix}")
-        if evaluated_data.test_count !=0 and evaluated_data.test_count < 20:
+        if evaluated_data.test_count != 0 and evaluated_data.test_count < 20:
             print(
-                f'{Fore.RED}Less than 20 compounds in the '
-                f'prospective validation set! Please treat the statistics with caution.{Fore.RESET}'
+                f"{Fore.RED}Less than 20 compounds in the "
+                f"validation set! Treat the statistics with caution.{Fore.RESET}"
             )
 
-        print_note(f"\n#### Predicted vs Experimental Values (prospective) {series_title_postfix}")
-        if len(all_df['observed']) > 0 and len(all_df['predicted']) > 0:
-            scatter_metrics_plot_title = f'{plot_title} - Prospective Validation Set'
+        print_note(
+            f"\n#### Predicted vs Experimental Values (prospective) {series_title_postfix}"
+        )
+        if len(all_df["observed"]) > 0 and len(all_df["predicted"]) > 0:
+            scatter_metrics_plot_title = f"{plot_title} - Prospective Validation Set"
             scatter_metrics = metrics_calculator.compute_scatter_metrics(
                 df=evaluated_data.test_df,
                 scale=plot_scale,
@@ -88,13 +90,17 @@ def calculate_and_plot(
                 plot_title=scatter_metrics_plot_title,
             )
         else:
-            print(f"{Fore.RED}No sufficient datapoints to generate plots {series_title_postfix}!{Fore.RESET}")
-
+            print(
+                f"{Fore.RED}No sufficient datapoints to generate "
+                f"plots {series_title_postfix}!{Fore.RESET}"
+            )
 
     # ============== 2.2 training metrics ===================
-    print_note(f"\n #### Predicted vs Experimental Values (training set) {series_title_postfix}")
+    print_note(
+        f"\n #### Predicted vs Experimental Values (training set) {series_title_postfix}"
+    )
     if evaluated_data.train_count > 0:
-        scatter_metrics_plot_title = f'{plot_title} - Training Set'
+        scatter_metrics_plot_title = f"{plot_title} - Training Set"
         scatter_metrics = metrics_calculator.compute_scatter_metrics(
             df=evaluated_data.train_df,
             scale=plot_scale,
@@ -116,15 +122,14 @@ def calculate_and_plot(
         )
     else:
         print(
-            f'{Fore.RED}Training set is empty - '
-            f'Not possible to generate scatter plots '
-            f'or compute any metrics {series_title_postfix}!{Fore.RESET}'
+            f"{Fore.RED}Training set is empty - "
+            f"Not possible to generate scatter plots "
+            f"or compute any metrics {series_title_postfix}!{Fore.RESET}"
         )
 
-
     if evaluated_data.test_count >= 10:
-        print_note(f"\n#### Model performance over time {series_title_postfix}")  
-        print_note(f"\n##### RMSE {series_title_postfix}")  
+        print_note(f"\n#### Model performance over time {series_title_postfix}")
+        print_note(f"\n##### RMSE {series_title_postfix}")
         model_stability_data = metrics_calculator.aggregate_model_stability_data(
             df=evaluated_data.test_df,
             scale=plot_scale,
@@ -137,22 +142,21 @@ def calculate_and_plot(
             )
         else:
             print(
-                f'{Fore.RED}No sufficient data to track model '
-                f'performances for {plot_title} {series_title_postfix} over time '
-                f'{series_title_postfix}!{Fore.RESET}'
+                f"{Fore.RED}No sufficient data to track model "
+                f"performances for {plot_title} {series_title_postfix} over time "
+                f"{series_title_postfix}!{Fore.RESET}"
             )
 
         print_note(
-            f'\n##### Similarity of prospective data to training '
-            f'set {series_title_postfix}'
+            f"\n##### Similarity of prospective data to training "
+            f"set {series_title_postfix}"
         )
 
-        # A value set arbitrarily - Might have to be optimized based on a few runs for a couple of pilot projects
+        # NOTE: Value set arbitrarily. Might have to be optimized based
+        # on a few runs for a couple of pilot projects
         discount_factor = 0.9
         t_labels, scores, w_scores = metrics_calculator.compute_time_weighted_scores(
-            df=all_df,
-            model_version_col=model_version,
-            discount_factor=discount_factor
+            df=all_df, model_version_col=model_version, discount_factor=discount_factor
         )
         plotter.plot_time_weighted_scores(
             t_labels=t_labels,
@@ -164,7 +168,7 @@ def calculate_and_plot(
     # ============ 3. threshold metrics and model usage advice ===============
     if evaluated_data.test_count >= 10:
         _, _, thresholds_selection = metrics_calculator.thresh_selection(
-            preds=evaluated_data.test_df['predicted'],
+            preds=evaluated_data.test_df["predicted"],
             desired_threshold=current_threshold,
             scale=plot_scale,
         )
@@ -175,50 +179,58 @@ def calculate_and_plot(
             pos_class=pos_class,
         )
         print_note(f"\n --- \n ### Model usage advice {series_title_postfix}")
-        print_note(f"\n#### What predicted threshold gives best enrichment {series_title_postfix}")
-        desired_project_threshold = threshold_metrics[threshold_metrics['threshold'] == current_threshold]
+        print_note(
+            f"\n#### What predicted threshold gives best enrichment {series_title_postfix}"
+        )
+        desired_project_threshold = threshold_metrics[
+            threshold_metrics["threshold"] == current_threshold
+        ]
         likelihood_metrics = metrics_calculator.compute_likelihood_metrics(
-            threshold=threshold_metrics['threshold'],
-            pred_pos_likelihood=threshold_metrics['pred_pos_likelihood'],
-            pred_neg_likelihood=threshold_metrics['pred_neg_likelihood'],
+            threshold=threshold_metrics["threshold"],
+            pred_pos_likelihood=threshold_metrics["pred_pos_likelihood"],
+            pred_neg_likelihood=threshold_metrics["pred_neg_likelihood"],
             desired_threshold_df=desired_project_threshold,
             scale=plot_scale,
-            obs=threshold_metrics['compounds_tested']
+            obs=threshold_metrics["compounds_tested"],
         )
         print_ppv_for_table(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold= round(10**likelihood_metrics.arrow[1]) if plot_scale == 'log' else round(likelihood_metrics.arrow[1]),
+            rec_threshold=round(10 ** likelihood_metrics.arrow[1])
+            if plot_scale == "log"
+            else round(likelihood_metrics.arrow[1]),
             rec_ppv=likelihood_metrics.arrow[2],
             rec_for=likelihood_metrics.arrow[3],
         )
         plotter.plot_likelihood(
-            threshold=threshold_metrics['threshold'],
+            threshold=threshold_metrics["threshold"],
             metrics=likelihood_metrics,
             desired_threshold=current_threshold,
             test_count=evaluated_data.test_count,
             pos_class=pos_class,
             plot_title=plot_title,
         )
-        print_note(f"\n#### Explore other experimental thresholds {series_title_postfix}")
+        print_note(
+            f"\n#### Explore other experimental thresholds {series_title_postfix}"
+        )
         line_plot_metrics = metrics_calculator.compute_lineplot_metrics(
-            threshold=threshold_metrics['threshold'],
-            metric1=threshold_metrics['ppv'],
-            metric2=threshold_metrics['compounds_discarded'],
+            threshold=threshold_metrics["threshold"],
+            metric1=threshold_metrics["ppv"],
+            metric2=threshold_metrics["compounds_discarded"],
             scale=plot_scale,
         )
         _, max_thresh, max_ppv, max_for = line_plot_metrics.arrow
-        max_ppv = 'N/A' if max_ppv == -1 else int(max_ppv)
-        max_for = 'N/A' if max_for == -1 else int(max_for)
+        max_ppv = "N/A" if max_ppv == -1 else int(max_ppv)
+        max_for = "N/A" if max_for == -1 else int(max_for)
         print_unbiased_ppv_for_table(
-            threshold=int(10**max_thresh) if plot_scale == 'log' else int(max_thresh),
+            threshold=int(10**max_thresh) if plot_scale == "log" else int(max_thresh),
             ppv=max_ppv,
             for_val=max_for,
         )
 
         plotter.line_plot_threshold_metrics(
-            threshold=threshold_metrics['threshold'],
+            threshold=threshold_metrics["threshold"],
             obs=likelihood_metrics.obs,
             test_count=evaluated_data.test_count,
             metrics=line_plot_metrics,
@@ -226,19 +238,20 @@ def calculate_and_plot(
         )
 
     else:
-        print_note(f"\n --- \n ### Predicted vs Experimental Values")
+        print_note("\n --- \n ### Predicted vs Experimental Values")
         plotter.scatter_plot(
             df=evaluated_data.test_df,
             desired_threshold=current_threshold,
             plot_title=scatter_metrics_plot_title,
         )
         print(
-            f'{Fore.RED}Less than 10 compounds with measured values'
-            f'in the prospective validation set!'
-            f'Not possible to compute any metrics!{Fore.RESET}'
+            f"{Fore.RED}Less than 10 compounds with measured values"
+            f"in the prospective validation set!"
+            f"Not possible to compute any metrics!{Fore.RESET}"
         )
 
-def predictive_validity(
+
+def evaluate_pv(
     input_df,
     observed_column,
     predicted_column,
@@ -273,9 +286,9 @@ def predictive_validity(
         series_distribution = pv_evaluator.get_test_series_distribution()
         if len(series_distribution) == 0:
             print(
-                f'{Fore.RED}No compounds with measured values for any '
-                f'of series in the prospective validation set! Not possible '
-                f'to compute any metrics!{Fore.RESET}'
+                f"{Fore.RED}No compounds with measured values for any "
+                f"of series in the prospective validation set! Not possible "
+                f"to compute any metrics!{Fore.RESET}"
             )
 
         for series in series_distribution.index:

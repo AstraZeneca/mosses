@@ -23,8 +23,8 @@ class PredictiveValidityEvaluator:
         pos_class: str,
         desired_threshold: float,
         training_set_col: str,
-        scale: str = 'log',
-        series_column: str | None = None
+        scale: str = "log",
+        series_column: str | None = None,
     ) -> None:
         """
         Initialize the PredictiveValidityEvaluator.
@@ -79,30 +79,30 @@ class PredictiveValidityEvaluator:
             Column name indicating the sample registration date.
         """
         if self.df is None or self.df.empty:
-            raise Exception(
-                "Dataframe was not provided or it is empty"
-            )
-        self.df['observed'] = pd.to_numeric(
-            self.df[observed_col].astype(str).str.replace(
-                r'>|<|NV|;|\?|,',
-                '',
+            raise Exception("Dataframe was not provided or it is empty")
+        self.df["observed"] = pd.to_numeric(
+            self.df[observed_col]
+            .astype(str)
+            .str.replace(
+                r">|<|NV|;|\?|,",
+                "",
                 regex=True,
             ),
-            errors='coerce'
+            errors="coerce",
         )
-        self.df['predicted'] = self.df[predicted_col]
+        self.df["predicted"] = self.df[predicted_col]
         columns = [
-            'Compound Name',
-            'observed',
-            'predicted',
+            "Compound Name",
+            "observed",
+            "predicted",
             training_set_col,
             model_version_col,
             sample_reg_date_col,
         ]
         drop_na_columns = [
-            'Compound Name',
-            'observed',
-            'predicted',
+            "Compound Name",
+            "observed",
+            "predicted",
             training_set_col,
         ]
         if self.series_column is not None:
@@ -132,12 +132,8 @@ class PredictiveValidityEvaluator:
         Tuple[pd.DataFrame, pd.DataFrame]
             A tuple containing the training DataFrame and the test DataFrame.
         """
-        train_df = df[
-            df[self.training_set_col] == 'train'
-        ]
-        test_df = df[
-            df[self.training_set_col].isin(['test', np.nan])
-        ]
+        train_df = df[df[self.training_set_col] == "train"]
+        test_df = df[df[self.training_set_col].isin(["test", np.nan])]
         return train_df, test_df
 
     def get_ratio_good_cpds(self, below_count: int, above_count: int) -> float:
@@ -162,7 +158,7 @@ class PredictiveValidityEvaluator:
         float
             The ratio of good compounds.
         """
-        if self.pos_class == '<':
+        if self.pos_class == "<":
             return below_count / (below_count + above_count)
         return above_count / (below_count + above_count)
 
@@ -180,7 +176,7 @@ class PredictiveValidityEvaluator:
         str
             The ratio expressed as a percentage string (e.g., '75%').
         """
-        return f'{int(ratio_num*100)}%'
+        return f"{int(ratio_num*100)}%"
 
     def get_test_series_distribution(self) -> pd.DataFrame:
         """
@@ -196,12 +192,9 @@ class PredictiveValidityEvaluator:
             A DataFrame with counts of compounds for each series.
         """
         _, test_df = self.split_train_test(self.df)
-        return test_df.groupby(by=self.series_column)['Compound Name'].count()
+        return test_df.groupby(by=self.series_column)["Compound Name"].count()
 
-    def evaluate(
-        self,
-        series: str | None = None
-    ) -> EvaluatedData:
+    def evaluate(self, series: str | None = None) -> EvaluatedData:
         """
         Evaluate predictive validity by splitting data
         into training and test sets, and computing summary counts.
@@ -229,12 +222,8 @@ class PredictiveValidityEvaluator:
         train_count = len(train_df)
         test_count = len(test_df)
 
-        below_count = len(
-            test_df[test_df['observed'] <= self.desired_threshold]
-        )
-        above_count = len(
-            test_df[test_df['observed'] > self.desired_threshold]
-        )
+        below_count = len(test_df[test_df["observed"] <= self.desired_threshold])
+        above_count = len(test_df[test_df["observed"] > self.desired_threshold])
 
         good_cpds_percent = self.get_percent(
             ratio_num=self.get_ratio_good_cpds(below_count, above_count)

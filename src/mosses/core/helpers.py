@@ -1,8 +1,8 @@
 import sys
-from IPython.core.display import display_markdown
 import textwrap
-import numpy as np
-import matplotlib.axes
+
+from IPython.core.display import display_markdown
+
 
 def is_in_notebook() -> bool:
     """
@@ -13,7 +13,8 @@ def is_in_notebook() -> bool:
     bool
         True if running inside a Jupyter notebook, False otherwise.
     """
-    return 'ipykernel' in sys.modules
+    return "ipykernel" in sys.modules
+
 
 def print_note(
     notebook_message: str,
@@ -27,13 +28,18 @@ def print_note(
     notebook_message : str
         The message to display in a notebook (markdown formatted).
     plain_message : Optional[str], optional
-        The plain text message to print when not in a notebook. If not provided, 
+        The plain text message to print when not in a notebook. If not provided,
         `notebook_message` is used after dedentation.
     """
     if is_in_notebook():
         display_markdown(textwrap.dedent(notebook_message), raw=True)
     else:
-        print(textwrap.dedent(plain_message) if plain_message else textwrap.dedent(notebook_message))
+        print(
+            textwrap.dedent(plain_message)
+            if plain_message
+            else textwrap.dedent(notebook_message)
+        )
+
 
 def print_metrics_table(
     r2: float,
@@ -45,9 +51,9 @@ def print_metrics_table(
     Parameters
     ----------
     r2 : float
-        The coefficient of determination between experimental and predicted values.
+        Coefficient of determination between experimental and predicted values.
     rmse : float
-        The Root Mean Squared Error (RMSE in log scale) between experimental and predicted values.
+        Root Mean Squared Error (in log scale) between experimental and predicted values.
     """
     msg = f"""
     | Metric | Value |
@@ -60,6 +66,7 @@ def print_metrics_table(
     Root Mean Squared Error (RMSE in log scale): {rmse}
     """
     print_note(msg, alt_message)
+
 
 def print_cpds_info_table(
     total: int,
@@ -103,6 +110,7 @@ def print_cpds_info_table(
     Ratio of good compounds made so far: {good_cpds_percent}
     """
     print_note(msg, alt_message)
+
 
 def print_ppv_for_table(
     pre_threshold: float,
@@ -149,6 +157,7 @@ def print_ppv_for_table(
     FOR at the selected threshold: {rec_for}
     """
     print_note(msg, alt_message)
+
 
 def print_unbiased_ppv_for_table(
     threshold: float,
