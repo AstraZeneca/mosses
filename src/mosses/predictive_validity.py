@@ -199,15 +199,17 @@ def calculate_and_plot(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold=round(
-                10**likelihood_metrics.arrow[1]
-            ) if plot_scale == "log" else round(likelihood_metrics.arrow[1], 1),
+            rec_threshold=round(10 ** likelihood_metrics.arrow[1])
+            if plot_scale == "log"
+            else round(likelihood_metrics.arrow[1], 1),
             rec_ppv=(
-                "N/A" if likelihood_metrics.arrow[2] == -1
+                "N/A"
+                if likelihood_metrics.arrow[2] == -1
                 else int(likelihood_metrics.arrow[2])
             ),
             rec_for=(
-                "N/A" if likelihood_metrics.arrow[3] == -1
+                "N/A"
+                if likelihood_metrics.arrow[3] == -1
                 else int(likelihood_metrics.arrow[3])
             ),
         )
@@ -232,7 +234,9 @@ def calculate_and_plot(
         max_ppv = "N/A" if max_ppv == -1 else int(max_ppv)
         max_for = "N/A" if max_for == -1 else int(max_for)
         print_unbiased_ppv_for_table(
-            threshold=int(10**max_thresh) if plot_scale == "log" else round(max_thresh, 1),
+            threshold=int(10**max_thresh)
+            if plot_scale == "log"
+            else round(max_thresh, 1),
             ppv=max_ppv,
             for_val=max_for,
         )
@@ -272,6 +276,30 @@ def evaluate_pv(
     plot_title,
     series_column=None,
 ):
+    """
+    Evaluates the model performance for a given data set and desired criterion.
+
+    Parameters:
+        input_df (pd.DataFrame): Input dataframe containing observed and predicted data.
+        observed_column (str): Name of the column with observed values.
+        predicted_column (str): Name of the column with predicted values.
+        training_set_column (str): Column indicating whether a sample
+            was in the training or test set.
+        pos_class (str): String (either ">" or "<=") indicating whether the
+            predictions should be greater or lower than the threshold.
+        current_threshold (float): Numerical cut-off used by the tool to
+            determine PPV and FOR values.
+        model_version (str): Version identifier for the model.
+        sample_registration_date (str or datetime): Registration date for
+            samples, used for temporal analysis.
+        plot_scale (str): Scale of the plot (e.g., 'linear', 'log').
+        plot_title (str): Name of the model evaluated.
+        series_column (str, optional): Optional column name to group
+            compounds by series name.
+
+    Returns:
+        None: The function prints out all results.
+    """
     # ================ 1. Evaluation ===============
     pv_evaluator = PredictiveValidityEvaluator(
         df=input_df,
