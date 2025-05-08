@@ -1,0 +1,8 @@
+input_df: logd_validation_1.csv
+observed_column: logd_exp
+predicted_column: logd_pred
+training_set_column: set_split
+model_version: model_version
+sample_registration_date: cpd_reg_date
+plot_scale: linear
+plot_title: LogD

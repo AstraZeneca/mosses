@@ -12,7 +12,7 @@ authors = [
     {name = "Vigneshwari Subramanian", email = "vignesh.bioinfo@gmail.com"},
     {name = "Gian Marco Ghiandoni", email = "ghiandoni.g@gmail.com"}
 ]
-license = {text = "MIT"}
+license = {text = "Apache v2.0"}
 dependencies = [
     "numpy",
     "pandas",
@@ -22,7 +22,7 @@ dependencies = [
     "colorama",
     "seaborn",
     "pyyaml",
-    "statsmodels",
+    "statsmodels"
 ]
 
 [project.optional-dependencies]
