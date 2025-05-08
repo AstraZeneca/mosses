@@ -70,7 +70,6 @@ def print_metrics_table(
 
 def print_cpds_info_table(
     total: int,
-    train_count: int,
     test_count: int,
     below_count: int,
     above_count: int,
@@ -83,8 +82,6 @@ def print_cpds_info_table(
     ----------
     total : int
         Total number of compounds with measured values.
-    train_count : int
-        Number of compounds in the training set.
     test_count : int
         Number of compounds in the prospective validation (test) set.
     below_count : int
@@ -98,7 +95,6 @@ def print_cpds_info_table(
     |  | No. of Compounds |
     | ------ | ----- |
     | Compounds with measured values | {total} |
-    | Training Set | {train_count} |
     | Prospective Validation Set | {test_count} |
     | Below Selected Experimental Threshold | {below_count} |
     | Above Selected Experimental Threshold | {above_count} |

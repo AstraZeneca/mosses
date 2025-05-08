@@ -21,7 +21,8 @@ dependencies = [
     "scikit-learn",
     "colorama",
     "seaborn",
-    "pyyaml"
+    "pyyaml",
+    "statsmodels",
 ]
 
 [project.optional-dependencies]

@@ -36,7 +36,6 @@ def calculate_and_plot(
         print_note(f"\n ### Overview {series_title_postfix}\n ---")
         print_cpds_info_table(
             total=total_compound_num,
-            train_count=evaluated_data.train_count,
             test_count=evaluated_data.test_count,
             below_count=evaluated_data.below_count,
             above_count=evaluated_data.above_count,
@@ -156,7 +155,10 @@ def calculate_and_plot(
         # on a few runs for a couple of pilot projects
         discount_factor = 0.9
         t_labels, scores, w_scores = metrics_calculator.compute_time_weighted_scores(
-            df=all_df, model_version_col=model_version, discount_factor=discount_factor
+            df=all_df,
+            model_version_col=model_version,
+            discount_factor=discount_factor,
+            scale=plot_scale,
         )
         plotter.plot_time_weighted_scores(
             t_labels=t_labels,
@@ -197,11 +199,17 @@ def calculate_and_plot(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold=round(10 ** likelihood_metrics.arrow[1])
-            if plot_scale == "log"
-            else round(likelihood_metrics.arrow[1]),
-            rec_ppv=likelihood_metrics.arrow[2],
-            rec_for=likelihood_metrics.arrow[3],
+            rec_threshold=round(
+                10**likelihood_metrics.arrow[1]
+            ) if plot_scale == "log" else round(likelihood_metrics.arrow[1], 1),
+            rec_ppv=(
+                "N/A" if likelihood_metrics.arrow[2] == -1
+                else int(likelihood_metrics.arrow[2])
+            ),
+            rec_for=(
+                "N/A" if likelihood_metrics.arrow[3] == -1
+                else int(likelihood_metrics.arrow[3])
+            ),
         )
         plotter.plot_likelihood(
             threshold=threshold_metrics["threshold"],
@@ -224,7 +232,7 @@ def calculate_and_plot(
         max_ppv = "N/A" if max_ppv == -1 else int(max_ppv)
         max_for = "N/A" if max_for == -1 else int(max_for)
         print_unbiased_ppv_for_table(
-            threshold=int(10**max_thresh) if plot_scale == "log" else int(max_thresh),
+            threshold=int(10**max_thresh) if plot_scale == "log" else round(max_thresh, 1),
             ppv=max_ppv,
             for_val=max_for,
         )

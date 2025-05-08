@@ -169,7 +169,7 @@ def calculate_all_metrics(df: pd.DataFrame) -> pd.DataFrame:
         precision_score(
             df["observed_binaries"],
             df["predicted_binaries"],
-            zero_division=0,
+            zero_division=np.nan,
         )
         * 100
         if (tp + fp) > 10
@@ -449,8 +449,8 @@ def compute_lineplot_metrics(
         the longest arrow values,
         and the formatted desired metric values.
     """
-    filt_metric1 = savgol_filter(metric1, window_length=5, polyorder=2)
-    filt_metric2 = savgol_filter(metric2, window_length=5, polyorder=2)
+    filt_metric1 = savgol_filter(metric1, window_length=3, polyorder=2)
+    filt_metric2 = savgol_filter(metric2, window_length=3, polyorder=2)
 
     if scale == "log":
         logged_threshold = np.log10(threshold)
@@ -500,15 +500,15 @@ def compute_likelihood_metrics(
     """
     filt_pred_pos = savgol_filter(
         pred_pos_likelihood,
-        window_length=5,
+        window_length=3,
         polyorder=2,
     )
     filt_pred_neg = savgol_filter(
         pred_neg_likelihood,
-        window_length=5,
+        window_length=3,
         polyorder=2,
     )
-    obs = savgol_filter(obs, window_length=5, polyorder=2)
+    obs = savgol_filter(obs, window_length=3, polyorder=2)
 
     if scale == "log":
         logged_threshold = np.log10(threshold)
@@ -690,6 +690,7 @@ def compute_time_weighted_scores(
     df: pd.DataFrame,
     model_version_col: str,
     discount_factor: float,
+    scale: str,
 ) -> tuple[list[str], np.ndarray, np.ndarray]:
     """
     Compute time-weighted similarity and correlation scores over time.
@@ -698,10 +699,13 @@ def compute_time_weighted_scores(
     ----------
     df : pd.DataFrame
         DataFrame with columns 'model_version', 'observed', and 'predicted'.
+    model_version_col: str
+        Version of the model with which the predictions were made
     discount_factor : float
         A discount factor (d > 0). Smaller values
         put more weight on recent scores.
         Setting discount_factor=1 is equivalent to uniform weighting.
+    scale : str
 
     Returns
     -------
@@ -717,6 +721,11 @@ def compute_time_weighted_scores(
         df["model_version_date"],
         errors="coerce",
     )
+    if scale == 'log':
+        df[['observed', 'predicted']] == df[['observed', 'predicted']].apply(np.log)
+    else:
+        df[['observed', 'predicted']] == df[['observed', 'predicted']]
+
     df_sorted = df.sort_values(by="model_version_date")
 
     t_arr, _ = np.unique(df_sorted["model_version_date"], return_counts=True)

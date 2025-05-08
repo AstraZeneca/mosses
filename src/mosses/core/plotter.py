@@ -313,6 +313,8 @@ class Plotter:
             color="grey",
             ci=None,
             ax=ax,
+            fit_reg=True,
+            robust=True,
         )
 
         ax.axhline(
@@ -389,6 +391,7 @@ class Plotter:
             color="grey",
             ci=None,
             ax=ax,
+            fit_reg=True,
         )
         ax.axhline(y=desired_threshold, color="orangered", linestyle="dotted")
         ax.axvline(x=desired_threshold, color="orangered", linestyle="dotted")
@@ -518,11 +521,12 @@ class Plotter:
                 "Likelihood to discard good compounds at each " "predicted threshold",
                 "% of compounds tested (cumulative)",
             ],
-            bbox_to_anchor=(0.5, -0.2),
+            bbox_to_anchor=(0.5, -0.23),
             loc="upper center",
             fontsize=7,
         )
         plt.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
     def plot_likelihood(
@@ -684,11 +688,12 @@ class Plotter:
                 "to pre-selected experimental threshold",
                 "% of compounds tested (cumulative)",
             ],
-            bbox_to_anchor=(0.5, -0.2),
+            bbox_to_anchor=(0.5, -0.23),
             loc="upper center",
             fontsize=7,
         )
         plt.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
     def plot_time_weighted_scores(
@@ -813,7 +818,8 @@ class Plotter:
             handles=handles,
             labels=[
                 "RMSEs over time",
-                "No. of compounds considered" "for prediction each month",
+                "No. of compounds considered "
+                "for prediction each month",
             ],
             bbox_to_anchor=(0.5, -0.3),
             loc="upper center",
