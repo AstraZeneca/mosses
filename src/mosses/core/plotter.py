@@ -314,7 +314,6 @@ class Plotter:
             ci=None,
             ax=ax,
             fit_reg=True,
-            robust=True,
         )
 
         ax.axhline(
