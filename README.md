@@ -17,4 +17,3 @@ Jupyter notebooks with examples can be found in the folder `examples`. We recomm
 
 ## TODO
 - [ ] Prepare /examples folder with mock data (Jenny)
-- [ ] Create tag for new version. Dependency on Evgenii's fix
