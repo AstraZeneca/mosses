@@ -14,6 +14,3 @@ You can install the library using `pip install mosses`, or you can clone this re
 
 ## Examples of usage
 Jupyter notebooks with examples can be found in the folder `examples`. We recommend following those to adapt your data, configs, and code to work with the modules in `mosses`.
-
-## TODO
-- [ ] Prepare /examples folder with mock data (Jenny)
