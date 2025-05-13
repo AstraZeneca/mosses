@@ -222,8 +222,8 @@ class PredictiveValidityEvaluator:
         train_count = len(train_df)
         test_count = len(test_df)
 
-        below_count = len(test_df[test_df["observed"] <= self.desired_threshold])
-        above_count = len(test_df[test_df["observed"] > self.desired_threshold])
+        below_count = len(df[df["observed"] <= self.desired_threshold])
+        above_count = len(df[df["observed"] > self.desired_threshold])
 
         good_cpds_percent = self.get_percent(
             ratio_num=self.get_ratio_good_cpds(below_count, above_count)

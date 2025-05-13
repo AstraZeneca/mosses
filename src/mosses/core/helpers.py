@@ -95,10 +95,10 @@ def print_cpds_info_table(
     |  | No. of Compounds |
     | ------ | ----- |
     | Compounds with measured values | {total} |
-    | Prospective Validation Set | {test_count} |
     | Below Selected Experimental Threshold | {below_count} |
     | Above Selected Experimental Threshold | {above_count} |
     | Ratio of good compounds made so far | {good_cpds_percent} |
+    | Prospective Validation Set | {test_count} |
     """
     alt_message = f"""
     Compounds below the desired project threshold: {below_count}

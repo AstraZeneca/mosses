@@ -60,6 +60,8 @@ def rmse_score(
     """
 
     if scale == "log":
+        obs = obs[obs != 0]
+        pred = pred[pred != 0]
         return round(math.sqrt(mean_squared_error(np.log10(obs), np.log10(pred))), 2)
 
     return round(math.sqrt(mean_squared_error(obs, pred)), 2)
@@ -88,6 +90,7 @@ def thresh_selection(
         threshold values including `desired_threshold`.
     """
     if scale == "log":
+        preds = preds[(preds != 0)]
         min_thresh = np.log10(min(preds))
         max_thresh = np.log10(max(preds))
         inc = (max_thresh - min_thresh) / 50
@@ -722,6 +725,7 @@ def compute_time_weighted_scores(
         errors="coerce",
     )
     if scale == 'log':
+        df = df[((df['observed'] != 0) & (df['predicted'] != 0))]
         df[['observed', 'predicted']] == df[['observed', 'predicted']].apply(np.log)
     else:
         df[['observed', 'predicted']] == df[['observed', 'predicted']]
@@ -805,6 +809,7 @@ def compute_scatter_metrics(
             - 'rmse': RMSE (float)
     """
     if scale == "log":
+        df = df[((df['observed'] != 0) & (df['predicted'] != 0))]
         obs = np.log10(df["observed"])
         pred = np.log10(df["predicted"])
     else:
@@ -812,9 +817,10 @@ def compute_scatter_metrics(
         pred = df["predicted"]
 
     r2_val = r2_score(obs, pred)
+    r2_val_mod = 0.0 if r2_val < 0.0 else r2_val
     rmse_val = math.sqrt(mean_squared_error(obs, pred))
 
     return ScatterMetrics(
-        r2=round(r2_val, 2),
+        r2=round(r2_val_mod, 1),
         rmse=round(rmse_val, 2),
     )
