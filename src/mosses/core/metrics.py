@@ -824,3 +824,590 @@ def compute_scatter_metrics(
         r2=round(r2_val_mod, 1),
         rmse=round(rmse_val, 2),
     )
+
+def calculate_heatmap_metrics(
+    endpoint: str,
+    series: str,
+    df_all: pd.DataFrame,
+    df: pd.DataFrame,
+    pos_class: str,
+    selected_threshold: float,
+    scale: str,
+    exp_error: float,)->pd.DataFrame:
+
+    """
+    Compute heatmap metrics: R² score, RMSE, PPV, FOR, longest arrow & Time dependant stability
+
+    Parameters
+    ----------
+    endpoint : str
+        Name of the model. For eg., AZlogD, ePSA, Solubility
+    series : str
+        Column name which contains information about the compound series
+    df_all: pd.DataFrame
+        A dataframe that includes all available data for a specific project
+    df: pd.DataFrame
+        A dataframe that's a subset of df_all and includes only test data
+    pos_class: str
+        Either '>' or '<' symbol that is used to define class annotations
+    selected_threshold: float
+        Selected experimental threshold to be used for PPV & FOR calculations
+    scale: str
+        Either 'log' or 'linear'
+    exp_error: float
+        Experimental errors calculated based on replicates (n >= 3)
+
+    Returns
+    -------
+    selected_rec_threshold_df_all: 
+        A data frame with all the calulated metrics to be displayed on the heatmap
+    """
+    class_annotation = 'below' if pos_class == '<' else 'above'
+
+    compounds_below_thresh = len(
+        df_all[df_all.observed <= selected_threshold]
+    )
+    compounds_above_thresh = len(
+        df_all[df_all.observed > selected_threshold]
+    )
+    
+    if len(df_all) > 0:
+        if pos_class == '<':
+            ratio_good_cpds = compounds_below_thresh / (compounds_below_thresh + compounds_above_thresh)
+        else:
+            ratio_good_cpds = compounds_above_thresh / (compounds_below_thresh + compounds_above_thresh)
+            
+        ratio_good_cpds = round(ratio_good_cpds*100)
+    else:
+        ratio_good_cpds = 0
+
+    selected_rec_threshold_df_all = pd.DataFrame()
+
+    all_metrics_df = pd.DataFrame()
+    
+    if len(df) > 10:
+        # Call the thresh function to get the threshold ranges for calculating
+        # the various metrics
+        _, max_thresh, thresholds_selection = thresh_selection(
+            preds= df.predicted,
+            desired_threshold= selected_threshold,
+            scale= scale,)
+
+        # Exclude the first threshold, as there wouldn't be many compounds
+        # below the minimal threshold - Generated statistics can be misleading
+        for thresh in thresholds_selection[1:]:
+            if pos_class == '>':
+                # Mapping to binaries based on different thresholds
+                df['observed_binaries'] = df['observed'].map(lambda x: int(x > thresh))
+                df['predicted_binaries'] = df['predicted'].map(lambda x: int(x > thresh))
+                        
+                # Identifying the predicted likelihood to extract good compounds
+                # at a selected experimental threshold
+                observations_pos_extract = df[df.predicted > thresh]
+                if len(observations_pos_extract)>10:
+                    pred_pos_likelihood = int((
+                        len(
+                            observations_pos_extract[observations_pos_extract['observed'] > selected_threshold]
+                        ) / len(observations_pos_extract)
+                    ) * 100)
+                else:
+                    pred_pos_likelihood = np.nan
+                            
+                # Identifying the likelihood to remove good compounds at a
+                # selected experimental threshold
+                observations_neg_extract = df[df.predicted <= thresh]
+                if len(observations_neg_extract) > 10:
+                    pred_neg_likelihood = int((
+                        len(
+                            observations_neg_extract[observations_neg_extract['observed'] > selected_threshold]
+                        ) / len(observations_neg_extract)
+                    ) * 100)
+                else:
+                    pred_neg_likelihood = np.nan
+                        
+                all_metrics = pd.DataFrame(
+                    [[
+                        endpoint,
+                        series,
+                        len(df_all),
+                        exp_error,
+                        class_annotation,
+                        thresh,
+                        int(ratio_good_cpds),
+                        pred_pos_likelihood,
+                        pred_neg_likelihood
+                    ]]
+                )
+                all_metrics_df = pd.concat(
+                    [
+                        all_metrics_df,
+                        all_metrics
+                    ],
+                    axis=0
+                )
+            else:
+                df['observed_binaries'] = df['observed'].map(lambda x: int(x <= thresh))
+                df['predicted_binaries'] = df['predicted'].map(lambda x: int(x <= thresh))
+                        
+                observations_pos_extract = df[df.predicted <= thresh]
+                if len(observations_pos_extract) > 10:
+                    pred_pos_likelihood = int((
+                        len(
+                            observations_pos_extract[observations_pos_extract['observed'] <= selected_threshold]
+                        ) / len(observations_pos_extract)
+                    ) * 100)
+                else:
+                    pred_pos_likelihood = np.nan
+                            
+                observations_neg_extract = df[df.predicted > thresh]
+                if len(observations_neg_extract)>10:
+                    pred_neg_likelihood = int((
+                        len(
+                            observations_neg_extract[observations_neg_extract['observed'] <= selected_threshold]
+                        ) / len(observations_neg_extract)
+                    ) * 100)
+                else:
+                    pred_neg_likelihood = np.nan
+
+                all_metrics = pd.DataFrame(
+                    [[
+                        endpoint,
+                        series,
+                        len(df_all),
+                        exp_error,
+                        class_annotation,
+                        thresh,
+                        int(ratio_good_cpds),
+                        pred_pos_likelihood,
+                        pred_neg_likelihood,
+                    ]]
+                )
+                all_metrics_df = pd.concat(
+                    [
+                        all_metrics_df,
+                        all_metrics
+                    ],
+                    axis=0
+                )
+
+        all_metrics_df.columns=[
+            'model',
+            'series',
+            'compounds_tested',
+            'exp_error',
+            'class_annotate',
+            'threshold',
+            'prop_compounds_tested',
+            'pred_pos_likelihood',
+            'pred_neg_likelihood',
+        ]
+
+        # Duplicates exist, if the threshold chosen by the user is one among
+        # the 50 thresholds chosen for analysis; Remove them prior to 
+        # calling the plot functions
+        all_metrics_df = all_metrics_df.drop_duplicates()
+
+        all_metrics_df_sorted = all_metrics_df.sort_values(
+            by=['threshold'],
+            ascending=False,
+        )
+
+        # Extracting statistics at desired project threshold
+        selected_threshold_df = all_metrics_df_sorted[
+            all_metrics_df_sorted.threshold == selected_threshold
+        ]
+        selected_threshold_df.columns = pd.RangeIndex(selected_threshold_df.columns.size)
+        
+        # PPV & FOR values fluctuate a lot;
+        # It's important to smoothen the curves prior to recommended threshold calculations
+        # Apply Savitzky-Golay filter with window size 5 and polynomial order 2
+        all_metrics_df_sorted['pred_pos_likelihood'] = savgol_filter(
+            all_metrics_df_sorted.pred_pos_likelihood,
+            window_length=3,
+            polyorder=2,
+        )
+        all_metrics_df_sorted['pred_neg_likelihood'] = savgol_filter(
+            all_metrics_df_sorted.pred_neg_likelihood,
+            window_length=3,
+            polyorder=2,
+        )
+
+        # Compute R2 and RMSES / call the function to calculate the longest arrow
+        # and extract the PPVs and FORs corresponding to recommended thresholds
+        if scale == 'log':
+            df = df[(df.observed != 0) & (df.predicted != 0)]
+            r2 = round(
+                r2_score(
+                    np.log10(df.observed),
+                    np.log10(df.predicted)
+                ),
+                1
+            )
+            rmse = round(
+                math.sqrt(
+                    mean_squared_error(
+                        np.log10(df.observed),
+                        np.log10(df.predicted)
+                    )
+                ),
+                1
+            )
+
+            logged_threshold = np.log10(all_metrics_df_sorted.threshold)
+
+            max_dist, max_thresh, max_ppv, max_for = longest_arrow(
+                np.array(logged_threshold),
+                np.array(all_metrics_df_sorted['pred_pos_likelihood']),
+                np.array(all_metrics_df_sorted['pred_neg_likelihood']),
+            )
+
+            # Convert threshold back to originial scale for easy interpretation
+            max_thresh = 10**max_thresh
+
+        else:
+            r2 = round(
+                r2_score(
+                    df.observed,
+                    df.predicted
+                ),
+                1
+            )
+            rmse = round(
+                math.sqrt(
+                    mean_squared_error(
+                        df.observed,
+                        df.predicted,
+                    )
+                ),
+                1
+            )
+            max_dist, max_thresh, max_ppv, max_for = longest_arrow(
+                np.array(all_metrics_df_sorted.threshold),
+                np.array(all_metrics_df_sorted['pred_pos_likelihood']),
+                np.array(all_metrics_df_sorted['pred_neg_likelihood']),
+            )
+        
+        
+        all_metrics_df_sorted['threshold'] = round(all_metrics_df_sorted['threshold'], 1)
+        
+        max_dist = np.nan if max_dist == -1 else round(max_dist)
+        max_thresh = np.nan if max_thresh == -1 else round(max_thresh,1)
+        max_ppv = np.nan if max_ppv == -1 else int(max_ppv)
+        max_for = np.nan if max_for == -1 else int(max_for)
+        
+
+        # Calculate weighted scores and pick the worst case scenario
+        # based on the last weighted score
+        discount_factor = 0.9
+        _, _, w_scores = compute_time_weighted_scores(
+            df=df_all,
+            model_version_col='ModelVersion',
+            discount_factor=discount_factor,
+            scale=scale
+        )
+        
+        if len(w_scores)<=1:
+            worst_score = np.nan
+        else:
+            worst_score = round(w_scores[-1].min(),1)
+
+        recommended_thresh_other_metrics_df = pd.DataFrame(
+            [[
+                r2,
+                rmse,
+                max_dist,
+                max_thresh,
+                max_ppv,
+                max_for,
+                worst_score,
+            ]]
+        )
+        selected_rec_threshold_df = pd.concat(
+            [
+                selected_threshold_df,
+                recommended_thresh_other_metrics_df,
+            ],
+            axis=1,
+        )
+    else:
+        selected_threshold_df = pd.concat(
+            [
+                pd.DataFrame(
+                    [[
+                        endpoint,
+                        series,
+                        len(df_all),
+                        exp_error,
+                        class_annotation,
+                        selected_threshold,
+                        int(ratio_good_cpds),
+                    ]]
+                ),
+                pd.DataFrame(
+                    np.full(
+                        shape=(1,2),
+                        fill_value=np.nan
+                    )
+                )
+            ],
+            axis=1
+        )
+        selected_threshold_df.columns = pd.RangeIndex(selected_threshold_df.columns.size)
+        recommended_thresh_other_metrics_df = pd.DataFrame(
+            np.full(
+                shape=(1,7),
+                fill_value=np.nan
+            )
+        )
+        selected_rec_threshold_df = pd.concat(
+            [
+                selected_threshold_df,
+                recommended_thresh_other_metrics_df,
+            ],
+            axis=1,
+        )
+
+    selected_rec_threshold_df_all = pd.concat(
+        [
+            selected_rec_threshold_df_all,
+            selected_rec_threshold_df,
+        ],
+        axis=0,
+    )
+    selected_rec_threshold_df_all.columns = pd.RangeIndex(
+        selected_rec_threshold_df_all.columns.size
+    )
+    return selected_rec_threshold_df_all
+
+def generate_heatmap_table(
+    data: pd.DataFrame,
+    endpoint: str,
+    observed_column: str,
+    predicted_column: str,
+    training_set_column: str,
+    pos_class: str,
+    selected_threshold: float,
+    series_column: str,
+    model_version: str,
+    sample_reg_date: str,
+    scale:str,
+    exp_error: float,
+) -> pd.DataFrame:
+
+    """
+    Generate heatmap metrics table corresponding to different series for a project
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        A dataframe that includes all available data for a specific project
+    endpoint : str
+        Name of the model. For eg., AZlogD, ePSA, Solubility
+    observed_column: str
+        Column that includes experimental data for a specific endpoint
+    predicted_column: str
+        Column that includes predicted data for a specific endpoint
+    training_set_column: str
+        Column that includes 'train/test' annotations for each compound
+    pos_class: str
+        Either '>' or '<' symbol that is used to define class annotations
+    selected_threshold: float
+        Selected experimental threshold to be used for PPV & FOR calculations
+    series_column : str
+        Column name which contains information about the compound series
+    model_version: str
+        Version of the model with which the predictions were made
+    sample_reg_date: str
+        Date that corresponds to the first time, a compound is registered in the system
+    scale: str
+        Either 'log' or 'linear'
+    exp_error: float
+        Experimental errors calculated from replicates (n >= 3)
+
+    Returns
+    -------
+    metrics_all: 
+        A data frame with the calculated metrics for all series and all end points
+    """
+
+    observed_parameter = pd.to_numeric(
+        data[observed_column].astype(str).str.replace(
+            '>|<|NV|;|\?|,',
+            '',
+            regex=True,
+        ),
+        errors='coerce',
+    )
+    predicted_parameter = data[predicted_column]
+    observed_predicted_df = pd.concat(
+        [
+            data['Compound Name'],
+            observed_parameter,
+            predicted_parameter,
+            data[training_set_column],
+            data[series_column],
+            data[model_version],
+            data[sample_reg_date]
+        ],
+        axis=1,
+        keys=[
+            'Compound Name',
+            'observed',
+            'predicted',
+            'CompoundsInTrainingSet',
+            'Series',
+            'ModelVersion',
+            'SampleRegDate',
+        ]
+    ).dropna(
+        subset=[
+            'Compound Name',
+            'observed',
+            'predicted',
+            'CompoundsInTrainingSet',
+        ]
+    )
+
+    observed_predicted_test = observed_predicted_df[
+        observed_predicted_df.CompoundsInTrainingSet.isin(['test',np.nan])
+    ]
+
+    metrics_all = pd.DataFrame()
+    series = 'Overall'
+    metrics_overall = calculate_heatmap_metrics(
+        endpoint,
+        series,
+        observed_predicted_df,
+        observed_predicted_test,
+        pos_class,
+        selected_threshold,
+        scale,
+        exp_error,
+    )
+    metrics_all = pd.concat([metrics_all,metrics_overall])
+
+    test_series_count = observed_predicted_test.groupby(by='Series')['Compound Name'].count()
+        
+    for series in test_series_count.index:
+        series_all_df = observed_predicted_df[observed_predicted_df['Series']==series]
+        series_test = observed_predicted_test[observed_predicted_df['Series']==series]
+        metrics_series = calculate_heatmap_metrics(
+            endpoint,
+            series,
+            series_all_df,
+            series_test,
+            pos_class,
+            selected_threshold,
+            scale,
+            exp_error,
+        ) 
+        metrics_all = pd.concat([metrics_all,metrics_series],axis=0)
+
+    return metrics_all
+
+def performance_class_set(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Assign model performance classes for the metrics calculated using the selected experimental threshold
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing R2, PPV% & Arrowlength.
+
+    Returns
+    -------
+    model_perf: str
+        A string that defines model performance
+    """    
+    if ((df['PPV %'] >= 75) and (df['ArrowLength'] >= 50)):
+        model_perf = 'Good'
+    elif ((df['PPV %'] in range(55,75)) or  (df['ArrowLength'] in range(20,50))):
+        model_perf = 'Medium'
+    elif ((df['PPV %'] < 55) or (df['ArrowLength'] < 20)):
+        model_perf = 'Bad'
+    else:
+        model_perf = 'NA in area of SET'
+    return model_perf
+
+def performance_class_opt(
+    df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Assign model performance classes for the metrics calculated using the recommended experimental threshold
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing R2, PPVopt% & Recommended_LongestArrow.
+
+    Returns
+    -------
+    model_perf: str
+        A string that defines model performance
+    """    
+    if ((df['PPVopt %'] >= 75) and (df['Recommended_LongestArrow'] >= 50)):
+        model_perf = 'Good'
+    elif ((df['PPVopt %'] in range(55,75)) or  (df['Recommended_LongestArrow'] in range(20,50))):
+        model_perf = 'Medium'
+    elif (((df['PPVopt %'] < 55) or (df['Recommended_LongestArrow'] < 20))):
+        model_perf = 'Bad'
+    else:
+        model_perf = 'NA in area of SET'
+    return model_perf
+
+def performance_class_compare(
+    df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Assign model performance classes for the metrics calculated using the recommended experimental threshold
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing R2, PPVopt% & Recommended_LongestArrow.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        Dataframe with modified thresholds and metrics
+    """    
+    if (
+        (df['Model Quality'] == 'Good')
+        and (
+            (df['Model Quality opt'] == 'Medium')
+            or (df['Model Quality opt'] == 'Bad')
+        )
+    ):
+        (
+            df['Opt Pred Threshold'],
+            df['PPVopt %'],
+            df['FORopt %'],
+            df['Recommended_LongestArrow'],
+            df['Model Quality opt'] 
+        ) = (
+            df['SET'],
+            df['PPV %'],
+            df['FOR %'],
+            df['ArrowLength'],
+            df['Model Quality']
+        )
+    elif (
+        (df['Model Quality'] == 'Medium')
+        and (df['Model Quality opt'] == 'Bad')
+    ):
+        (
+            df['Opt Pred Threshold'],
+            df['PPVopt %'],
+            df['FORopt %'],
+            df['Recommended_LongestArrow'],
+            df['Model Quality opt']
+        ) = (
+            df['SET'],
+            df['PPV %'],
+            df['FOR %'],
+            df['ArrowLength'],
+            df['Model Quality']
+        )
+    return df
