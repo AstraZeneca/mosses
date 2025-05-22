@@ -13,10 +13,12 @@ def project_heatmap_stats(
     result_df = pd.DataFrame()
     endpoint_category_mapping = {}
     models_order = {}
+    units_mapping = {}
 
     for entry in models_metadata:
         endpoint_category_mapping[entry['name']] = entry['attributes']['category']
         models_order[entry['name']] = entry['attributes']['heatmap_order']
+        units_mapping[entry['name']] = entry['attributes']['units']
 
     columns = df.columns.to_list()
 
@@ -139,12 +141,17 @@ def project_heatmap_stats(
     category_df.columns = ['Model', 'Category']
     sort_order_df = pd.DataFrame(models_order.items())
     sort_order_df.columns = ['Model','Sort_Order']
+    units_df = pd.DataFrame(units_mapping.items())
+    units_df.columns = ['Model','Units']
 
     result_df = result_df.merge(
         category_df,
         on='Model',
     ).merge(
         sort_order_df,
+        on='Model',
+    ).merge(
+        units_df,
         on='Model',
     )
 
@@ -158,11 +165,12 @@ def project_heatmap_stats(
             'Series',
             'Aim',
             'SET',
+            'Units',
             'Compounds',
             'Compounds Obeying SET %',
             'Exp_Error',
-            'R2',
             'RMSE',
+            'R2',
             'PPV %',
             'FOR %',
             'Model Quality',
@@ -233,7 +241,17 @@ def project_heatmap_stats(
                 props=[
                     ('text-align', 'left')
                 ]
-            )
+            ),
+            dict(selector='th.col0, td.col0', props=[('width', '6%')]),
+            dict(selector='th.col1, td.col1', props=[('width', '6%')]),
+            dict(selector='th.col2, td.col2', props=[('width', '7.5%')]),
+            dict(selector='th.col5, td.col5', props=[('width', '4%')]),
+            dict(selector='th.col6, td.col6', props=[('width', '5%')]),
+            dict(selector='th.col7, td.col7', props=[('width', '5%')]),
+            dict(selector='th.col8, td.col8', props=[('width', '5%')]),
+            dict(selector='th.col13, td.col13', props=[('width', '5%')]),
+            dict(selector='th.col17, td.col17', props=[('width', '4%')]),
+            dict(selector='th.col18, td.col18', props=[('width', '4%')]),
         ]
     ).set_properties(
         **{'text-align': 'left'}

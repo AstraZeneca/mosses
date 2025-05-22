@@ -301,7 +301,7 @@ class Plotter:
             Metrics (e.g., R2 and RMSE) to be printed.
             If None, a warning is shown.
         """
-        df = df[(df['observed'] != 0) and (df['predicted'] != 0)]
+        df = df[(df['observed'] != 0) & (df['predicted'] != 0)]
         df["log_predicted"] = np.log10(df["predicted"])
         df["log_observed"] = np.log10(df["observed"])
 
