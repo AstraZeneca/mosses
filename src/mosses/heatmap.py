@@ -242,16 +242,6 @@ def project_heatmap_stats(
                     ('text-align', 'left')
                 ]
             ),
-            dict(selector='th.col0, td.col0', props=[('width', '6%')]),
-            dict(selector='th.col1, td.col1', props=[('width', '6%')]),
-            dict(selector='th.col2, td.col2', props=[('width', '7.5%')]),
-            dict(selector='th.col5, td.col5', props=[('width', '4%')]),
-            dict(selector='th.col6, td.col6', props=[('width', '5%')]),
-            dict(selector='th.col7, td.col7', props=[('width', '5%')]),
-            dict(selector='th.col8, td.col8', props=[('width', '5%')]),
-            dict(selector='th.col13, td.col13', props=[('width', '5%')]),
-            dict(selector='th.col17, td.col17', props=[('width', '4%')]),
-            dict(selector='th.col18, td.col18', props=[('width', '4%')]),
         ]
     ).set_properties(
         **{'text-align': 'left'}
