@@ -1,5 +1,6 @@
 import sys
 import textwrap
+import pandas as pd
 
 from IPython.core.display import display_markdown
 
@@ -184,3 +185,28 @@ def print_unbiased_ppv_for_table(
     FOR at the selected threshold: {for_val}
     """
     print_note(msg, alt_message)
+
+def highlight_cells(
+    df: pd.DataFrame
+) -> pd.DataFrame:
+
+    """
+    Highlight cells with different colors in the dataframe based on model quality and stability
+
+    Parameters
+    ----------
+    df : dataframe
+        The final dataframe with all the calculated metrics to be displayed as a part of the heatmap
+    """
+    color_mapping = {
+        'Good': 'background-color: green',
+        'Medium': 'background-color: orange',
+        'Bad': 'background-color: red',
+        'NA in area of SET': 'background-color: grey',
+
+        'Stable': 'background-color: green',
+        'Neutral': 'background-color: orange',
+        'Unstable': 'background-color: red',
+        'NA': 'background-color: grey'
+    }
+    return color_mapping.get(df, '')
