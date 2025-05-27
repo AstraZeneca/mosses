@@ -168,7 +168,7 @@ def calculate_and_plot(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold=round(10 ** likelihood_metrics.arrow[1])
+            rec_threshold=round(10 ** likelihood_metrics.arrow[1], 1)
             if plot_scale == "log"
             else round(likelihood_metrics.arrow[1], 1),
             rec_ppv=(

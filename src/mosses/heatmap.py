@@ -71,7 +71,7 @@ def project_heatmap_stats(
     result_df.columns = [
         'Model',
         'Series',
-        'Compounds',
+        'Compounds with measured values',
         'Exp_Error (log)',
         'Aim',
         'SET',
@@ -166,7 +166,7 @@ def project_heatmap_stats(
             'Aim',
             'SET',
             'Units',
-            'Compounds',
+            'Compounds with measured values',
             'Compounds Obeying SET %',
             'Exp_Error (log)',
             'RMSE (log)',

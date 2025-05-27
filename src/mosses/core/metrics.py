@@ -617,6 +617,7 @@ def compute_threshold_metrics(
                     len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
                     / len(obs_pos_subset)
                 ) * 100
+                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
             else:
                 pred_pos_likelihood = math.nan
 
@@ -626,6 +627,7 @@ def compute_threshold_metrics(
                     len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
                     / len(obs_neg_subset)
                 ) * 100
+                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
             else:
                 pred_neg_likelihood = math.nan
         else:
@@ -637,6 +639,7 @@ def compute_threshold_metrics(
                     len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
                     / len(obs_pos_subset)
                 ) * 100
+                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
             else:
                 pred_pos_likelihood = math.nan
             obs_neg_subset = df[df["predicted"] > thresh]
@@ -645,6 +648,7 @@ def compute_threshold_metrics(
                     len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
                     / len(obs_neg_subset)
                 ) * 100
+                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
             else:
                 pred_neg_likelihood = math.nan
 
@@ -905,11 +909,12 @@ def calculate_heatmap_metrics(
                 # at a selected experimental threshold
                 observations_pos_extract = df[df.predicted > thresh]
                 if len(observations_pos_extract)>10:
-                    pred_pos_likelihood = int((
+                    pred_pos_likelihood = (
                         len(
                             observations_pos_extract[observations_pos_extract['observed'] > selected_threshold]
                         ) / len(observations_pos_extract)
-                    ) * 100)
+                    ) * 100
+                    pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
                 else:
                     pred_pos_likelihood = np.nan
                             
@@ -917,11 +922,10 @@ def calculate_heatmap_metrics(
                 # selected experimental threshold
                 observations_neg_extract = df[df.predicted <= thresh]
                 if len(observations_neg_extract) > 10:
-                    pred_neg_likelihood = int((
-                        len(
-                            observations_neg_extract[observations_neg_extract['observed'] > selected_threshold]
-                        ) / len(observations_neg_extract)
-                    ) * 100)
+                    pred_neg_likelihood = len(
+                        observations_neg_extract[observations_neg_extract['observed'] > selected_threshold]
+                    ) / len(observations_neg_extract) * 100
+                    pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
                 else:
                     pred_neg_likelihood = np.nan
                         
@@ -951,21 +955,23 @@ def calculate_heatmap_metrics(
                         
                 observations_pos_extract = df[df.predicted <= thresh]
                 if len(observations_pos_extract) > 10:
-                    pred_pos_likelihood = int((
+                    pred_pos_likelihood = (
                         len(
                             observations_pos_extract[observations_pos_extract['observed'] <= selected_threshold]
                         ) / len(observations_pos_extract)
-                    ) * 100)
+                    ) * 100
+                    pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
                 else:
                     pred_pos_likelihood = np.nan
                             
                 observations_neg_extract = df[df.predicted > thresh]
                 if len(observations_neg_extract)>10:
-                    pred_neg_likelihood = int((
+                    pred_neg_likelihood = (
                         len(
                             observations_neg_extract[observations_neg_extract['observed'] <= selected_threshold]
                         ) / len(observations_neg_extract)
-                    ) * 100)
+                    ) * 100
+                    pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
                 else:
                     pred_neg_likelihood = np.nan
 
@@ -1081,6 +1087,7 @@ def calculate_heatmap_metrics(
                 ),
                 1
             )
+
             max_dist, max_thresh, max_ppv, max_for = longest_arrow(
                 np.array(all_metrics_df_sorted.threshold),
                 np.array(all_metrics_df_sorted['pred_pos_likelihood']),
@@ -1091,7 +1098,7 @@ def calculate_heatmap_metrics(
         all_metrics_df_sorted['threshold'] = round(all_metrics_df_sorted['threshold'], 1)
         
         max_dist = np.nan if max_dist == -1 else round(max_dist)
-        max_thresh = np.nan if max_thresh == -1 else round(max_thresh,1)
+        max_thresh = np.nan if max_thresh == -1 else round(max_thresh, 1)
         max_ppv = np.nan if max_ppv == -1 else int(max_ppv)
         max_for = np.nan if max_for == -1 else int(max_for)
         
