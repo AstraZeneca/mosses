@@ -95,37 +95,6 @@ def calculate_and_plot(
             )
 
     # ============== 2.2 training metrics ===================
-    print_note(
-        f"\n #### Predicted vs Experimental Values (training set) {series_title_postfix}"
-    )
-    if evaluated_data.train_count > 0:
-        scatter_metrics_plot_title = f"{plot_title} - Training Set"
-        scatter_metrics = metrics_calculator.compute_scatter_metrics(
-            df=evaluated_data.train_df,
-            scale=plot_scale,
-        )
-        if evaluated_data.train_count >= 10:
-            print_metrics_table(
-                r2=scatter_metrics.r2,
-                rmse=scatter_metrics.rmse,
-            )
-        else:
-            print(
-                f"{Fore.RED}Less than 10 compounds to "
-                f"compute R2 and RMSEs!{Fore.RESET}"
-            )
-        plotter.scatter_plot(
-            df=evaluated_data.train_df,
-            desired_threshold=current_threshold,
-            plot_title=scatter_metrics_plot_title,
-        )
-    else:
-        print(
-            f"{Fore.RED}Training set is empty - "
-            f"Not possible to generate scatter plots "
-            f"or compute any metrics {series_title_postfix}!{Fore.RESET}"
-        )
-
     if evaluated_data.test_count >= 10:
         print_note(f"\n#### Model performance over time {series_title_postfix}")
         print_note(f"\n##### RMSE {series_title_postfix}")
@@ -199,7 +168,7 @@ def calculate_and_plot(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold=round(10 ** likelihood_metrics.arrow[1])
+            rec_threshold=round(10 ** likelihood_metrics.arrow[1], 1)
             if plot_scale == "log"
             else round(likelihood_metrics.arrow[1], 1),
             rec_ppv=(
@@ -250,17 +219,25 @@ def calculate_and_plot(
         )
 
     else:
-        print_note("\n --- \n ### Predicted vs Experimental Values")
-        plotter.scatter_plot(
-            df=evaluated_data.test_df,
-            desired_threshold=current_threshold,
-            plot_title=scatter_metrics_plot_title,
-        )
-        print(
-            f"{Fore.RED}Less than 10 compounds with measured values"
-            f"in the prospective validation set!"
-            f"Not possible to compute any metrics!{Fore.RESET}"
-        )
+        if (evaluated_data.test_count > 0 and series is None) or (
+            len(evaluated_data.all_df) != 0 and series is not None
+        ):
+            print_note("\n --- \n ### Predicted vs Experimental Values")
+            plotter.scatter_plot(
+                df=evaluated_data.test_df,
+                desired_threshold=current_threshold,
+                plot_title=scatter_metrics_plot_title,
+            )
+            print(
+                f"{Fore.RED}Less than 10 compounds with measured values"
+                f"in the prospective validation set!"
+                f"Not possible to compute any metrics!{Fore.RESET}"
+            )
+        else:
+            print(
+                f"{Fore.RED}There is no data to display. Test data is empty"
+                f"Not possible to compute any metrics!{Fore.RESET}"
+            )
 
 
 def evaluate_pv(
@@ -329,6 +306,32 @@ def evaluate_pv(
 
         for series in series_distribution.index:
             evaluated_data = pv_evaluator.evaluate(series=series)
+            if evaluated_data is None:
+                print(
+                    f"{Fore.RED}There is no enough data to "
+                    f"compute any metrics for {series} series!{Fore.RESET}"
+                )
+            else:
+                calculate_and_plot(
+                    all_df=evaluated_data.all_df,
+                    evaluated_data=evaluated_data,
+                    current_threshold=current_threshold,
+                    plotter=plotter,
+                    sample_registration_date=sample_registration_date,
+                    model_version=model_version,
+                    pos_class=pos_class,
+                    plot_title=plot_title,
+                    plot_scale=plot_scale,
+                    series=series,
+                )
+    else:
+        evaluated_data = pv_evaluator.evaluate()
+        if evaluated_data is None:
+            print(
+                f"{Fore.RED}There is no enough data to "
+                f"compute any metrics!{Fore.RESET}"
+            )
+        else:
             calculate_and_plot(
                 all_df=evaluated_data.all_df,
                 evaluated_data=evaluated_data,
@@ -339,18 +342,4 @@ def evaluate_pv(
                 pos_class=pos_class,
                 plot_title=plot_title,
                 plot_scale=plot_scale,
-                series=series,
             )
-    else:
-        evaluated_data = pv_evaluator.evaluate()
-        calculate_and_plot(
-            all_df=evaluated_data.all_df,
-            evaluated_data=evaluated_data,
-            current_threshold=current_threshold,
-            plotter=plotter,
-            sample_registration_date=sample_registration_date,
-            model_version=model_version,
-            pos_class=pos_class,
-            plot_title=plot_title,
-            plot_scale=plot_scale,
-        )

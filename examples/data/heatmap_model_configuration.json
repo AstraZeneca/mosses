@@ -1,0 +1,56 @@
+[
+    {
+        "name": "logD",
+        "attributes": {
+            "observed_column": "logd_exp",
+            "predicted_column": "logd_pred",
+            "training_set_column": "logd_set_split",
+            "model_version": "logd_model_version",
+            "sample_registration_date": "cpd_reg_date",
+            "plot_scale": "linear",
+            "plot_title": "logD",
+            "pos_class": "<",
+            "threshold": 3,
+            "category": "PhysChem",
+            "exp_error": 0.14,
+            "heatmap_order": 1,
+            "units": ""
+        }
+    },
+    {
+        "name": "Caco2 Efflux ratio",
+        "attributes": {
+            "observed_column": "caco2_efflux_ratio_exp",
+            "predicted_column": "caco2_efflux_ratio_pred",
+            "training_set_column": "caco2_efflux_ratio_set_split",
+            "model_version": "caco2_efflux_ratio_model_version",
+            "sample_registration_date": "cpd_reg_date",
+            "plot_scale": "log",
+            "plot_title": "Caco2 Efflux ratio",
+            "pos_class": "<",
+            "threshold": 10,
+            "category": "Permeability",
+            "exp_error": 0.15,
+            "heatmap_order": 6,
+            "units": ""
+        }
+    },
+    {
+        "name": "RH CLint",
+        "attributes": {
+            "observed_column": "rh_clint_exp",
+            "predicted_column": "rh_clint_pred",
+            "training_set_column": "rh_clint_set_split",
+            "model_version": "rh_clint_model_version",
+            "sample_registration_date": "cpd_reg_date",
+            "plot_scale": "log",
+            "plot_title": "RH CLint",
+            "pos_class": "<",
+            "threshold": 10,
+            "category": "Clint",
+            "exp_error": 0.18,
+            "heatmap_order": 9,
+            "units": "µl/min/1E6"
+        }
+    }
+]

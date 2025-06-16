@@ -194,7 +194,7 @@ class PredictiveValidityEvaluator:
         _, test_df = self.split_train_test(self.df)
         return test_df.groupby(by=self.series_column)["Compound Name"].count()
 
-    def evaluate(self, series: str | None = None) -> EvaluatedData:
+    def evaluate(self, series: str | None = None) -> EvaluatedData | None:
         """
         Evaluate predictive validity by splitting data
         into training and test sets, and computing summary counts.
@@ -221,6 +221,8 @@ class PredictiveValidityEvaluator:
         train_df, test_df = self.split_train_test(df)
         train_count = len(train_df)
         test_count = len(test_df)
+        if test_count == 0 and train_count == 0:
+            return None
 
         below_count = len(df[df["observed"] <= self.desired_threshold])
         above_count = len(df[df["observed"] > self.desired_threshold])

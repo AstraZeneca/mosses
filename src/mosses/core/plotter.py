@@ -586,7 +586,7 @@ class Plotter:
                     text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle="<->", color="plum"),
+                    arrowprops=dict(arrowstyle="<->", color="green"),
                 )
                 if (
                     metrics.desired_pred_pos != "N/A"
@@ -602,7 +602,7 @@ class Plotter:
                             np.log10(desired_threshold),
                             metrics.desired_pred_pos,
                         ),
-                        arrowprops=dict(arrowstyle="<->", color="green"),
+                        arrowprops=dict(arrowstyle="<->", color="plum"),
                     )
 
             ax2 = ax.twinx()
@@ -635,7 +635,7 @@ class Plotter:
                     text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle="<->", color="plum"),
+                    arrowprops=dict(arrowstyle="<->", color="green"),
                 )
                 if (
                     metrics.desired_pred_pos != "N/A"
@@ -645,7 +645,7 @@ class Plotter:
                         text="",
                         xy=(desired_threshold, metrics.desired_pred_neg),
                         xytext=(desired_threshold, metrics.desired_pred_pos),
-                        arrowprops=dict(arrowstyle="<->", color="green"),
+                        arrowprops=dict(arrowstyle="<->", color="plum"),
                     )
 
             ax2 = ax.twinx()
