@@ -1,6 +1,8 @@
 .PHONY: build install upload upload_test test coverage
 
 build:
+	rm -rf build
+	rm -rf dist
 	python -m build --wheel
 	python -m build --sdist
 

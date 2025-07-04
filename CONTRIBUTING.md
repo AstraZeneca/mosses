@@ -19,3 +19,6 @@ pre-commit install
 ```
 
 You are ready to go! Please make sure you always work on a branch and merge through pull requests.
+
+## Pushing packages to Pypi
+Currently packages are just pushed directly using `twine`. See `Makefile`. You need the correct permissions upstream to push to the server.
