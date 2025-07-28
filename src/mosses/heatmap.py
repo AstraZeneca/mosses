@@ -88,7 +88,7 @@ def project_heatmap_stats(
     ]
     
     # Calculate arrow length at the selected experimental threshold
-    result_df['ArrowLength'] = abs(result_df['PPV %'] - result_df['FOR %'])
+    result_df['ArrowLength'] = result_df['PPV %'] - result_df['FOR %']
 
     # Assign model quality based on a set of predefined criteria
     result_df['Model Quality'] = result_df.apply(
@@ -197,7 +197,7 @@ def project_heatmap_stats(
             'FORopt %': 'Int64',
         }
     )
-
+    
     result_df = result_df.drop(
         [
             'Recommended_LongestArrow',
@@ -207,6 +207,7 @@ def project_heatmap_stats(
         ],
         axis=1,
     )
+    
 
     result_df_regrouped = pd.DataFrame()
     result_df_regrouped = pd.concat(
