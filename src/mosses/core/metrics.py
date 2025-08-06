@@ -185,7 +185,7 @@ def longest_arrow(
 
     df = pd.concat(
         [
-            df_metrics,
+            df_metrics.reset_index(drop=True),
             ci_df[["ci_ppv_lower","ci_ppv_upper","ci_for_lower","ci_for_upper"]]
         ],
         axis=1,
