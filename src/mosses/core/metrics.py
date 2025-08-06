@@ -182,7 +182,14 @@ def longest_arrow(
         - **FOR at Best Threshold (float)**
     """
     df_metrics = pd.DataFrame({"thresh": thresholds, "ppv": ppv, "for": for_vals})
-    df = pd.concat([df_metrics,ci_df[["ci_ppv_lower","ci_ppv_upper","ci_for_lower","ci_for_upper"]]],axis=1)
+
+    df = pd.concat(
+        [
+            df_metrics,
+            ci_df[["ci_ppv_lower","ci_ppv_upper","ci_for_lower","ci_for_upper"]]
+        ],
+        axis=1,
+    )
     df = df.dropna().reset_index(drop=True)
 
     if df.empty:
