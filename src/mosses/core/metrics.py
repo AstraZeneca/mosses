@@ -893,7 +893,7 @@ def calculate_heatmap_metrics(
         # Call the thresh function to get the threshold ranges for calculating
         # the various metrics
         _, max_thresh, thresholds_selection = thresh_selection(
-            preds= df.predicted,
+            preds=df.predicted,
             desired_threshold= selected_threshold,
             scale= scale,)
 
@@ -1245,7 +1245,14 @@ def generate_heatmap_table(
         ),
         errors='coerce',
     )
-    predicted_parameter = data[predicted_column]
+    predicted_parameter = pd.to_numeric(
+        data[predicted_column].astype(str).str.replace(
+            '>|<|NV|;|\?|,',
+            '',
+            regex=True,
+        ),
+        errors='coerce',
+    )
     observed_predicted_df = pd.concat(
         [
             data['Compound Name'],
@@ -1274,7 +1281,6 @@ def generate_heatmap_table(
             'CompoundsInTrainingSet',
         ]
     )
-
     observed_predicted_test = observed_predicted_df[
         observed_predicted_df.CompoundsInTrainingSet.isin(['test',np.nan])
     ]
