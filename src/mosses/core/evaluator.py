@@ -90,7 +90,16 @@ class PredictiveValidityEvaluator:
             ),
             errors="coerce",
         )
-        self.df["predicted"] = self.df[predicted_col]
+        self.df["predicted"] = pd.to_numeric(
+            self.df[predicted_col]
+            .astype(str)
+            .str.replace(
+                r">|<|NV|;|\?|,",
+                "",
+                regex=True,
+            ),
+            errors="coerce",
+        )
         columns = [
             "Compound Name",
             "observed",
