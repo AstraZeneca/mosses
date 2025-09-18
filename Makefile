@@ -17,3 +17,8 @@ upload:
 
 coverage:
 	pytest --cov=src test/ -vv --cov-report term-missing
+
+create_git_tag:
+	version=$$(grep -Po "version\s*=\s*['\"]\K[^'\"]+" pyproject.toml); \
+	git tag v$$version
+	git push --tags
