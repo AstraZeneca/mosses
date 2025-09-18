@@ -13,6 +13,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import precision_score
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
+from statsmodels.stats.proportion import proportion_confint
 
 
 @dataclass
@@ -25,6 +26,10 @@ class ScatterMetrics:
 class LinePlotMetrics:
     filtered_metric1: np.ndarray
     filtered_metric2: np.ndarray
+    ppv_ci_lower: np.array
+    ppv_ci_upper: np.array
+    for_ci_lower: np.array
+    for_ci_upper: np.array
     arrow: tuple[float, float, float, float]
 
 
@@ -33,6 +38,10 @@ class LikelihoodMetrics:
     filtered_pred_pos: np.ndarray
     filtered_pred_neg: np.ndarray
     obs: np.ndarray
+    ppv_ci_lower: np.array
+    ppv_ci_upper: np.array
+    for_ci_lower: np.array
+    for_ci_upper: np.array
     arrow: tuple[float, float, float, float]
     desired_pred_pos: int | str
     desired_pred_neg: int | str
@@ -109,14 +118,54 @@ def thresh_selection(
     return min_thresh, max_thresh, thresholds
 
 
+def metrics_ci(
+    thresholds: np.ndarray,
+    ppv: np.ndarray,
+    for_vals: np.ndarray,
+    ) -> pd.DataFrame:
+
+    """
+    Estimate uncertainties considering the calculated PPVs and FORs
+
+    Parameters
+    ----------
+    thresholds : np.ndarray
+    ppv : np.ndarray
+    for_vals : np.ndarray
+
+    Returns
+    -------
+    pd.Dataframe
+        - A dataframe with thresholds, the exact values of PPVs/FORs
+        together with the upper and lower boundaries of PPVs/FORs at 
+        95% confidence interval.
+       
+    """
+
+    df = pd.DataFrame({"thresh": thresholds,"ppv": ppv, "for": for_vals})
+
+    se_ppv = np.nanstd(df['ppv']) / np.sqrt(len(df['ppv']))
+    se_for = np.nanstd(df['for']) / np.sqrt(len(df['for']))
+
+    df['ci_ppv_upper'] = df['ppv'] + 1.96*se_ppv
+    df['ci_ppv_lower'] = df['ppv'] - 1.96*se_ppv
+    df['ci_for_upper'] = df['for'] + 1.96*se_for
+    df['ci_for_lower'] = df['for'] - 1.96*se_for
+    df = df.round(2).reset_index(drop=True)
+    
+    return df
+    
+
+
 def longest_arrow(
     thresholds: np.ndarray,
     ppv: np.ndarray,
     for_vals: np.ndarray,
+    ci_df: pd.DataFrame,
 ) -> tuple[float, float, float, float]:
     """
     Identify the threshold with the maximum
-    absolute difference between PPV and FOR.
+    difference between PPV and FOR.
 
     Parameters
     ----------
@@ -132,12 +181,23 @@ def longest_arrow(
         - **PPV at Best Threshold (float)**
         - **FOR at Best Threshold (float)**
     """
-    df = pd.DataFrame({"thresh": thresholds, "ppv": ppv, "for": for_vals})
+    df_metrics = pd.DataFrame({"thresh": thresholds, "ppv": ppv, "for": for_vals})
+
+    df = pd.concat(
+        [
+            df_metrics.reset_index(drop=True),
+            ci_df[["ci_ppv_lower","ci_ppv_upper","ci_for_lower","ci_for_upper"]]
+        ],
+        axis=1,
+    )
     df = df.dropna().reset_index(drop=True)
+
     if df.empty:
-        return -1, -1, -1, -1
-    distances = np.abs(df["ppv"] - df["for"])
+        return -100, -100, -100, -100
+    #distances = df["ppv"] - df["for"]
+    distances = df["ci_ppv_lower"] - df["ci_for_upper"]
     idx = np.argmax(distances)
+
     return (
         distances[idx],
         df.loc[idx, "thresh"],
@@ -432,7 +492,10 @@ def aggregate_model_stability_data(
 
 
 def compute_lineplot_metrics(
-    threshold: np.ndarray, metric1: np.ndarray, metric2: np.ndarray, scale: str
+    threshold: np.ndarray, 
+    metric1: np.ndarray, 
+    metric2: np.ndarray, 
+    scale: str
 ) -> LinePlotMetrics:
     """
     Compute threshold metrics for line plotting.
@@ -449,7 +512,7 @@ def compute_lineplot_metrics(
     -------
     LinePlotMetrics
         A dataclass instance containing the smoothed metric arrays,
-        the longest arrow values,
+        the longest arrow values, uncertainty estimates for the metrics,
         and the formatted desired metric values.
     """
     filt_metric1 = savgol_filter(metric1, window_length=3, polyorder=2)
@@ -457,13 +520,19 @@ def compute_lineplot_metrics(
 
     if scale == "log":
         logged_threshold = np.log10(threshold)
-        arrow = longest_arrow(logged_threshold, filt_metric1, filt_metric2)
+        ci_metrics = metrics_ci(logged_threshold, filt_metric1, filt_metric2)
+        arrow = longest_arrow(logged_threshold, filt_metric1, filt_metric2,ci_metrics)
     else:
-        arrow = longest_arrow(threshold, filt_metric1, filt_metric2)
-
+        ci_metrics = metrics_ci(threshold, filt_metric1, filt_metric2)
+        arrow = longest_arrow(threshold, filt_metric1, filt_metric2,ci_metrics)
+        
     return LinePlotMetrics(
         filtered_metric1=filt_metric1,
         filtered_metric2=filt_metric2,
+        ppv_ci_lower =  np.array(ci_metrics['ci_ppv_lower'],dtype = np.float_),
+        ppv_ci_upper =  np.array(ci_metrics['ci_ppv_upper'],dtype = np.float_),
+        for_ci_lower =  np.array(ci_metrics['ci_for_lower'],dtype = np.float_),
+        for_ci_upper = np.array(ci_metrics['ci_for_upper'],dtype = np.float_),
         arrow=arrow,
     )
 
@@ -515,11 +584,14 @@ def compute_likelihood_metrics(
 
     if scale == "log":
         logged_threshold = np.log10(threshold)
+        ci_metrics = metrics_ci(logged_threshold, filt_pred_pos, filt_pred_neg)
         max_dist, max_thresh, max_ppv, max_for = longest_arrow(
             logged_threshold,
             filt_pred_pos,
             filt_pred_neg,
+            ci_metrics,
         )
+
         likelihood_value_for_nan = "N/A"
 
         desired_threshold_df["pred_pos_likelihood"] = (
@@ -534,11 +606,14 @@ def compute_likelihood_metrics(
             else int(desired_threshold_df["pred_neg_likelihood"])
         )
     else:
+        ci_metrics = metrics_ci(threshold, filt_pred_pos, filt_pred_neg)
         max_dist, max_thresh, max_ppv, max_for = longest_arrow(
             threshold,
             filt_pred_pos,
             filt_pred_neg,
+            ci_metrics,
         )
+
         likelihood_value_for_nan = 0
 
         desired_threshold_df["pred_pos_likelihood"] = (
@@ -560,11 +635,15 @@ def compute_likelihood_metrics(
         arrow=(
             max_dist,
             max_thresh,
-            -1 if max_ppv == -1 else int(max_ppv),
-            -1 if max_for == -1 else int(max_for),
+            -100 if max_ppv == -100 else int(max_ppv),
+            -100 if max_for == -100 else int(max_for),
         ),
         desired_pred_pos=desired_threshold_df["pred_pos_likelihood"][0],
         desired_pred_neg=desired_threshold_df["pred_neg_likelihood"][0],
+        ppv_ci_lower =  np.array(ci_metrics['ci_ppv_lower'],dtype = np.float_),
+        ppv_ci_upper =  np.array(ci_metrics['ci_ppv_upper'],dtype = np.float_),
+        for_ci_lower =  np.array(ci_metrics['ci_for_lower'],dtype = np.float_),
+        for_ci_upper = np.array(ci_metrics['ci_for_upper'],dtype = np.float_),
     )
 
 
@@ -745,8 +824,7 @@ def compute_time_weighted_scores(
         test_mask = df["model_version_date"] == t
         train_df = df[train_mask]
         prospective_df = df[test_mask]
-
-        if (len(train_df) >= 10) and (len(prospective_df) >= 10):
+        if (len(train_df) >= 5) and (len(prospective_df) >= 5):
             train_x = train_df["observed"].to_numpy()
             train_y = train_df["predicted"].to_numpy()
             test_x = prospective_df["observed"].to_numpy()
@@ -769,7 +847,6 @@ def compute_time_weighted_scores(
             )
             scores_list.append([sim_score, corr_score])
             t_all.append(t)
-
     if len(scores_list) == 0:
         return [], np.array([]), np.array([])
 
@@ -1060,11 +1137,12 @@ def calculate_heatmap_metrics(
             )
 
             logged_threshold = np.log10(all_metrics_df_sorted.threshold)
-
+            ci_metrics = metrics_ci(logged_threshold, all_metrics_df_sorted['pred_pos_likelihood'], all_metrics_df_sorted['pred_neg_likelihood'])
             max_dist, max_thresh, max_ppv, max_for = longest_arrow(
                 np.array(logged_threshold),
                 np.array(all_metrics_df_sorted['pred_pos_likelihood']),
                 np.array(all_metrics_df_sorted['pred_neg_likelihood']),
+                ci_metrics,
             )
 
             # Convert threshold back to originial scale for easy interpretation
@@ -1087,20 +1165,21 @@ def calculate_heatmap_metrics(
                 ),
                 1
             )
-
+            ci_metrics = metrics_ci(all_metrics_df_sorted.threshold, all_metrics_df_sorted['pred_pos_likelihood'], all_metrics_df_sorted['pred_neg_likelihood'])
             max_dist, max_thresh, max_ppv, max_for = longest_arrow(
                 np.array(all_metrics_df_sorted.threshold),
                 np.array(all_metrics_df_sorted['pred_pos_likelihood']),
                 np.array(all_metrics_df_sorted['pred_neg_likelihood']),
+                ci_metrics,
             )
         
         
         all_metrics_df_sorted['threshold'] = round(all_metrics_df_sorted['threshold'], 1)
         
-        max_dist = np.nan if max_dist == -1 else round(max_dist)
-        max_thresh = np.nan if max_thresh == -1 else round(max_thresh, 1)
-        max_ppv = np.nan if max_ppv == -1 else int(max_ppv)
-        max_for = np.nan if max_for == -1 else int(max_for)
+        max_dist = np.nan if max_dist == -100 else round(max_dist)
+        max_thresh = np.nan if max_thresh == -100 else round(max_thresh, 1)
+        max_ppv = np.nan if max_ppv == -100 else int(max_ppv)
+        max_for = np.nan if max_for == -100 else int(max_for)
         
 
         # Calculate weighted scores and pick the worst case scenario
@@ -1333,15 +1412,17 @@ def performance_class_set(
     -------
     model_perf: str
         A string that defines model performance
-    """    
-    if ((df['PPV %'] >= 75) and (df['ArrowLength'] >= 50)):
+    """
+    if (df['Compounds with measured values']<10):
+        model_perf = 'FD'
+    elif ((df['PPV %'] >= 75) and (df['ArrowLength'] >= 50)):
         model_perf = 'Good'
-    elif ((df['PPV %'] in range(55,75)) or  (df['ArrowLength'] in range(20,50))):
+    elif ((df['PPV %'] >= 55) and  (df['ArrowLength'] >= 20)):
         model_perf = 'Medium'
     elif ((df['PPV %'] < 55) or (df['ArrowLength'] < 20)):
         model_perf = 'Bad'
     else:
-        model_perf = 'NA in area of SET'
+        model_perf = 'NA'
     return model_perf
 
 def performance_class_opt(
@@ -1359,15 +1440,17 @@ def performance_class_opt(
     -------
     model_perf: str
         A string that defines model performance
-    """    
-    if ((df['PPVopt %'] >= 75) and (df['Recommended_LongestArrow'] >= 50)):
+    """  
+    if (df['Compounds with measured values']<10):
+        model_perf = 'FD'
+    elif ((df['PPVopt %'] >= 75) and (df['Recommended_LongestArrow'] >= 50)):
         model_perf = 'Good'
-    elif ((df['PPVopt %'] in range(55,75)) or  (df['Recommended_LongestArrow'] in range(20,50))):
+    elif ((df['PPVopt %'] >= 55) and  (df['Recommended_LongestArrow'] >= 20)):
         model_perf = 'Medium'
     elif (((df['PPVopt %'] < 55) or (df['Recommended_LongestArrow'] < 20))):
         model_perf = 'Bad'
     else:
-        model_perf = 'NA in area of SET'
+        model_perf = 'NA'
     return model_perf
 
 def performance_class_compare(

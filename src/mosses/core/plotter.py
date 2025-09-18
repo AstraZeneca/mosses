@@ -39,7 +39,7 @@ class Plotter:
         matplotlib.axes.Axes
             The modified Axes object with updated y-axis ticks and labels.
         """
-        ax.set_ylim(0, 100)
+        ax.set_ylim(-10, 110)
         y_ticks = ax.get_yticks()
         new_y_ticks = [int(y) for y in y_ticks]
         ax.set_yticks(new_y_ticks)
@@ -437,13 +437,27 @@ class Plotter:
                 np.log10(threshold),
                 metrics.filtered_metric1,
                 color="blue",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                np.log10(threshold), 
+                metrics.ppv_ci_lower,
+                metrics.ppv_ci_upper, 
+                color='blue', 
+                alpha=.2
             )
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_metric2,
                 color="orange",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                np.log10(threshold), 
+                metrics.for_ci_lower,
+                metrics.for_ci_upper, 
+                color='orange', 
+                alpha=.2
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
 
@@ -464,7 +478,7 @@ class Plotter:
                 np.log10(threshold),
                 obs,
                 color="grey",
-                marker="o",
+                marker=".",
             )
             ax2.set_xlim(
                 min(np.log10(threshold)),
@@ -475,13 +489,27 @@ class Plotter:
                 threshold,
                 metrics.filtered_metric1,
                 color="blue",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                threshold, 
+                metrics.ppv_ci_lower,
+                metrics.ppv_ci_upper, 
+                color='blue', 
+                alpha=.2
             )
             ax.plot(
                 threshold,
                 metrics.filtered_metric2,
                 color="orange",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                threshold, 
+                metrics.for_ci_lower,
+                metrics.for_ci_upper, 
+                color='orange', 
+                alpha=.2
             )
 
             if (
@@ -570,13 +598,27 @@ class Plotter:
                 np.log10(threshold),
                 metrics.filtered_pred_pos,
                 color="turquoise",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                np.log10(threshold), 
+                metrics.ppv_ci_lower,
+                metrics.ppv_ci_upper, 
+                color='turquoise', 
+                alpha=.2
             )
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_pred_neg,
                 color="indigo",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                np.log10(threshold), 
+                metrics.for_ci_lower,
+                metrics.for_ci_upper, 
+                color='indigo', 
+                alpha=.2
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
 
@@ -610,7 +652,7 @@ class Plotter:
                 np.log10(threshold),
                 metrics.obs,
                 color="grey",
-                marker="o",
+                marker=".",
             )
             ax2.set_xlim(
                 min(np.log10(threshold)),
@@ -621,13 +663,27 @@ class Plotter:
                 threshold,
                 metrics.filtered_pred_pos,
                 color="turquoise",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                threshold, 
+                metrics.ppv_ci_lower,
+                metrics.ppv_ci_upper, 
+                color='turquoise', 
+                alpha=.2
             )
             ax.plot(
                 threshold,
                 metrics.filtered_pred_neg,
                 color="indigo",
-                marker="o",
+                marker=".",
+            )
+            ax.fill_between(
+                threshold, 
+                metrics.for_ci_lower,
+                metrics.for_ci_upper, 
+                color='indigo', 
+                alpha=.2
             )
             if metrics.filtered_pred_pos.size and metrics.filtered_pred_neg.size:
                 _, max_thresh, max_ppv, max_for = metrics.arrow
@@ -653,7 +709,7 @@ class Plotter:
                 threshold,
                 metrics.obs,
                 color="grey",
-                marker="o",
+                marker=".",
             )
 
         ax.set_xlabel("Predicted threshold", fontweight="bold")
