@@ -127,7 +127,7 @@ def project_heatmap_stats(
         'Time Dependant Stability Class'
     ] = 'NA'
 
-    # Assign 0, when R2 values are negative; Done to avoid confusions among the users
+    # Assign 0, when R2 values are negative
     result_df.loc[result_df['R2'] < 0.0, 'R2'] = 0
     
     # Don't recommend thresholds, if the suggested threshold make the model quality look bad
@@ -155,33 +155,32 @@ def project_heatmap_stats(
         on='Model',
     )
 
-    # Columns reorderd to make the interpretation of outputs more intuitive
     result_df = result_df.loc[
         :,
         [
-            'Model',
-            'Category',
-            'Sort_Order',
             'Series',
+            'Category',
+            'Model',
+            'Units',
             'Aim',
             'SET',
-            'Units',
+            'Opt Pred Threshold',
+            'PPVopt %',
+            'FORopt %',
+            'Model Quality opt',
+            'Time Dependant Stability Class',
+            'Exp_Error (log)',
             'Compounds with measured values',
             'Compounds Obeying SET %',
-            'Exp_Error (log)',
             'RMSE (log)',
             'R2',
             'PPV %',
             'FOR %',
             'Model Quality',
-            'Opt Pred Threshold',
-            'PPVopt %',
-            'FORopt %',
-            'Model Quality opt',
             'Recommended_LongestArrow',
             'TimeDependant_Stability',
-            'Time Dependant Stability Class',
             'ArrowLength',
+            'Sort_Order',
         ]
     ]
     result_df = result_df.sort_values(
@@ -207,7 +206,23 @@ def project_heatmap_stats(
         ],
         axis=1,
     )
-    
+
+    result_df['Opt Pred Threshold'] = result_df['Opt Pred Threshold'].apply(
+        lambda x: float(f"{x:.2g}") if pd.notna(x) else x
+    )
+
+    display_name_map = {
+        'SET': 'Selected experimental threshold (SET)',
+        'Exp_Error (log)': 'Experimental Error (log)',
+        'PPV %': 'Likelihood to extract good compounds (PPV %) at threshold = SET',
+        'FOR %': 'Likelihood to lose good compounds (FOR %) at threshold = SET',
+        'Model Quality': 'Model Quality at threshold = SET',
+        'Opt Pred Threshold': 'Optimized Predicted Threshold for filtering',
+        'PPVopt %': 'Likelihood to extract good compounds (PPV %) at optimized threshold',
+        'FORopt %': 'Likelihood to lose good compounds (FOR %) at optimized threshold',
+        'Model Quality opt': 'Model Quality at optimized threshold',
+    }
+    result_df = result_df.rename(columns=display_name_map)
 
     result_df_regrouped = pd.DataFrame()
     result_df_regrouped = pd.concat(
@@ -225,13 +240,15 @@ def project_heatmap_stats(
         ignore_index=True
     )
 
+    highlight_subset = [
+        'Model Quality at threshold = SET',
+        'Model Quality at optimized threshold',
+        'Time Dependant Stability Class',
+    ]
+
     result_df_regrouped = result_df_regrouped.style.applymap(
         highlight_cells,
-        subset=[
-            'Model Quality',
-            'Model Quality opt',
-            'Time Dependant Stability Class'
-        ]
+        subset=highlight_subset
     ).format(
         precision=1,
         na_rep=""
