@@ -84,7 +84,7 @@ class PredictiveValidityEvaluator:
             self.df[observed_col]
             .astype(str)
             .str.replace(
-                r">|<|NV|;|\?|,",
+                r">|<|NV|;|\?|,",  # noqa: W605
                 "",
                 regex=True,
             ),
@@ -94,7 +94,7 @@ class PredictiveValidityEvaluator:
             self.df[predicted_col]
             .astype(str)
             .str.replace(
-                r">|<|NV|;|\?|,",
+                r">|<|NV|;|\?|,",  # noqa: W605
                 "",
                 regex=True,
             ),

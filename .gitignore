@@ -54,3 +54,5 @@ docs/_build/
 .init
 mirror.sh
 *.pdf
+.vscode
+*.lock
