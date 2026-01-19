@@ -301,7 +301,7 @@ class Plotter:
             Metrics (e.g., R2 and RMSE) to be printed.
             If None, a warning is shown.
         """
-        df = df[(df['observed'] != 0) & (df['predicted'] != 0)]
+        df = df[(df["observed"] != 0) & (df["predicted"] != 0)]
         df["log_predicted"] = np.log10(df["predicted"])
         df["log_observed"] = np.log10(df["observed"])
 
@@ -440,11 +440,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                np.log10(threshold), 
+                np.log10(threshold),
                 metrics.ppv_ci_lower,
-                metrics.ppv_ci_upper, 
-                color='blue', 
-                alpha=.2
+                metrics.ppv_ci_upper,
+                color="blue",
+                alpha=0.2,
             )
             ax.plot(
                 np.log10(threshold),
@@ -453,11 +453,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                np.log10(threshold), 
+                np.log10(threshold),
                 metrics.for_ci_lower,
-                metrics.for_ci_upper, 
-                color='orange', 
-                alpha=.2
+                metrics.for_ci_upper,
+                color="orange",
+                alpha=0.2,
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
 
@@ -492,11 +492,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                threshold, 
+                threshold,
                 metrics.ppv_ci_lower,
-                metrics.ppv_ci_upper, 
-                color='blue', 
-                alpha=.2
+                metrics.ppv_ci_upper,
+                color="blue",
+                alpha=0.2,
             )
             ax.plot(
                 threshold,
@@ -505,11 +505,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                threshold, 
+                threshold,
                 metrics.for_ci_lower,
-                metrics.for_ci_upper, 
-                color='orange', 
-                alpha=.2
+                metrics.for_ci_upper,
+                color="orange",
+                alpha=0.2,
             )
 
             if (
@@ -601,11 +601,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                np.log10(threshold), 
+                np.log10(threshold),
                 metrics.ppv_ci_lower,
-                metrics.ppv_ci_upper, 
-                color='turquoise', 
-                alpha=.2
+                metrics.ppv_ci_upper,
+                color="turquoise",
+                alpha=0.2,
             )
             ax.plot(
                 np.log10(threshold),
@@ -614,11 +614,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                np.log10(threshold), 
+                np.log10(threshold),
                 metrics.for_ci_lower,
-                metrics.for_ci_upper, 
-                color='indigo', 
-                alpha=.2
+                metrics.for_ci_upper,
+                color="indigo",
+                alpha=0.2,
             )
             ax = Plotter.reset_x_ticks(threshold, ax)
 
@@ -666,11 +666,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                threshold, 
+                threshold,
                 metrics.ppv_ci_lower,
-                metrics.ppv_ci_upper, 
-                color='turquoise', 
-                alpha=.2
+                metrics.ppv_ci_upper,
+                color="turquoise",
+                alpha=0.2,
             )
             ax.plot(
                 threshold,
@@ -679,11 +679,11 @@ class Plotter:
                 marker=".",
             )
             ax.fill_between(
-                threshold, 
+                threshold,
                 metrics.for_ci_lower,
-                metrics.for_ci_upper, 
-                color='indigo', 
-                alpha=.2
+                metrics.for_ci_upper,
+                color="indigo",
+                alpha=0.2,
             )
             if metrics.filtered_pred_pos.size and metrics.filtered_pred_neg.size:
                 _, max_thresh, max_ppv, max_for = metrics.arrow
@@ -792,20 +792,20 @@ class Plotter:
         ax.plot(
             t_labels,
             scores[:, 1],
-            color="orange",
-            label="Similarity of correlation",
+            color="red",
+            label="Similarity of correlations",
         )
         ax.plot(
             t_labels,
             w_scores[:, 0],
-            color="green",
+            color="cyan",
             label="Similarity of data (Time-weighted)",
         )
         ax.plot(
             t_labels,
             w_scores[:, 1],
-            color="red",
-            label="Similarity of correlation (Time-weighted)",
+            color="orange",
+            label="Similarity of correlations (Time-weighted)",
         )
 
         ax.set_xlabel("Model version", fontweight="bold")
@@ -838,52 +838,51 @@ class Plotter:
         plot_title : str
             Title for the plot.
         """
-        fig, ax = plt.subplots(figsize=(5, 5))
-        fig.canvas.header_visible = False
-        ax2 = ax.twinx()
+        for metric in ["rmse", "r2"]:
+            fig, ax = plt.subplots(figsize=(5, 5))
+            fig.canvas.header_visible = False
+            ax2 = ax.twinx()
 
-        ax.plot(
-            agg_df["model_version"],
-            agg_df["rmse"],
-            color="deeppink",
-            marker="o",
-            label="RMSE",
-        )
-        ax2.plot(
-            agg_df["model_version"],
-            agg_df["no_of_cpds"],
-            color="grey",
-            marker="o",
-            label="No. of compounds",
-        )
+            ax.plot(
+                agg_df["model_version"],
+                agg_df[metric],
+                color="deeppink",
+                marker="o",
+                label=f"{metric.upper()}",
+            )
+            ax2.plot(
+                agg_df["model_version"],
+                agg_df["no_of_cpds"],
+                color="grey",
+                marker="o",
+                label="No. of compounds",
+            )
 
-        ax.set_ylim(0, 2.5)
-        ax.set_xlabel("Model Version", fontweight="bold")
-        ax.set_ylabel("RMSE (log scale)", fontweight="bold")
-        ax2.set_ylabel("No. of compounds", fontweight="bold")
+            ax.set_xlabel("Model Version", fontweight="bold")
+            ax.set_ylabel(f"{metric.upper()}", fontweight="bold")
+            ax2.set_ylabel("No. of compounds", fontweight="bold")
 
-        ax.set_xticklabels(agg_df["model_version"], rotation=90)
-        ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
+            ax.set_xticklabels(agg_df["model_version"], rotation=90)
+            ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        ax.set_title(plot_title + " - Model performance over time")
-        handles = [
-            Line2D([], [], color="deeppink", marker="o", label="RMSE"),
-            Line2D([], [], color="grey", marker="o", label="No. of compounds"),
-        ]
-        ax.legend(
-            handles=handles,
-            labels=[
-                "RMSEs over time",
-                "No. of compounds considered "
-                "for prediction each month",
-            ],
-            bbox_to_anchor=(0.5, -0.3),
-            loc="upper center",
-            fontsize=7,
-        )
+            ax.set_title(plot_title + " - Model performance over time")
+            handles = [
+                Line2D([], [], color="deeppink", marker="o", label=f"{metric.upper()}"),
+                Line2D([], [], color="grey", marker="o", label="No. of compounds"),
+            ]
+            ax.legend(
+                handles=handles,
+                labels=[
+                    f"{metric.upper()} over time",
+                    "No. of compounds considered " "for prediction each month",
+                ],
+                bbox_to_anchor=(0.5, -0.3),
+                loc="upper center",
+                fontsize=7,
+            )
 
-        fig.tight_layout()
-        plt.show()
+            fig.tight_layout()
+            plt.show()
 
     def scatter_plot(
         self,

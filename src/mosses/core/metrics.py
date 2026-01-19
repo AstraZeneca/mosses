@@ -451,6 +451,7 @@ def aggregate_model_stability_data(
     pd.DataFrame
         Aggregated DataFrame with columns:
             - 'rmse'
+            - 'r2'
             - 'no_of_cpds'
             - 'model_version' (the group label)
             - The index is set to the datetime
@@ -471,6 +472,9 @@ def aggregate_model_stability_data(
     agg_df = pd.DataFrame()
     agg_df["rmse"] = grouped.apply(
         lambda x: rmse_score(x["observed"], x["predicted"], scale),
+    )
+    agg_df["r2"] = grouped.apply(
+        lambda x: r2_score(x["observed"], x["predicted"]),
     )
     agg_df["no_of_cpds"] = grouped["observed"].count()
     agg_df["model_version"] = agg_df.index
@@ -510,6 +514,10 @@ def compute_lineplot_metrics(
         the longest arrow values, uncertainty estimates for the metrics,
         and the formatted desired metric values.
     """
+    # Clean data by replacing NaN and inf values
+    metric1 = np.nan_to_num(metric1, nan=0.0, posinf=100.0, neginf=0.0)
+    metric2 = np.nan_to_num(metric2, nan=0.0, posinf=100.0, neginf=0.0)
+    
     filt_metric1 = savgol_filter(metric1, window_length=3, polyorder=2)
     filt_metric2 = savgol_filter(metric2, window_length=3, polyorder=2)
 
@@ -565,6 +573,11 @@ def compute_likelihood_metrics(
             - desired_pred_neg: formatted desired
               predicted negative likelihood.
     """
+    # Clean data by replacing NaN and inf values
+    pred_pos_likelihood = np.nan_to_num(pred_pos_likelihood, nan=0.0, posinf=100.0, neginf=0.0)
+    pred_neg_likelihood = np.nan_to_num(pred_neg_likelihood, nan=0.0, posinf=100.0, neginf=0.0)
+    obs = np.nan_to_num(obs, nan=0.0, posinf=1000.0, neginf=0.0)
+    
     filt_pred_pos = savgol_filter(
         pred_pos_likelihood,
         window_length=3,

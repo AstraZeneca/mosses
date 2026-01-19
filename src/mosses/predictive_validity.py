@@ -240,6 +240,39 @@ def calculate_and_plot(
             )
 
 
+def _process_and_plot(
+    evaluated_data: EvaluatedData | None,
+    plotter: Plotter,
+    current_threshold: float,
+    sample_registration_date: str,
+    model_version: str,
+    pos_class: str,
+    plot_title: str,
+    plot_scale: str,
+    series: str | None = None,
+):
+    if not evaluated_data:
+        series_msg = f" for {series} series" if series else ""
+        print(
+            f"{Fore.RED}There is no enough data to "
+            f"compute any metrics{series_msg}!{Fore.RESET}"
+        )
+        return
+    
+    calculate_and_plot(
+        all_df=evaluated_data.all_df,
+        evaluated_data=evaluated_data,
+        current_threshold=current_threshold,
+        plotter=plotter,
+        sample_registration_date=sample_registration_date,
+        model_version=model_version,
+        pos_class=pos_class,
+        plot_title=plot_title,
+        plot_scale=plot_scale,
+        series=series,
+    )
+
+
 def evaluate_pv(
     input_df,
     observed_column,
@@ -295,7 +328,21 @@ def evaluate_pv(
     )
     plotter = Plotter(scale=plot_scale)
 
-    if series_column is not None:
+    if not series_column:
+        evaluated_data = pv_evaluator.evaluate()
+        _process_and_plot(
+            evaluated_data=evaluated_data,
+            plotter=plotter,
+            current_threshold=current_threshold,
+            sample_registration_date=sample_registration_date,
+            model_version=model_version,
+            pos_class=pos_class,
+            plot_title=plot_title,
+            plot_scale=plot_scale,
+        )
+        return
+
+    if series_column:
         series_distribution = pv_evaluator.get_test_series_distribution()
         if len(series_distribution) == 0:
             print(
@@ -303,43 +350,18 @@ def evaluate_pv(
                 f"of series in the prospective validation set! Not possible "
                 f"to compute any metrics!{Fore.RESET}"
             )
+            return
 
         for series in series_distribution.index:
             evaluated_data = pv_evaluator.evaluate(series=series)
-            if evaluated_data is None:
-                print(
-                    f"{Fore.RED}There is no enough data to "
-                    f"compute any metrics for {series} series!{Fore.RESET}"
-                )
-            else:
-                calculate_and_plot(
-                    all_df=evaluated_data.all_df,
-                    evaluated_data=evaluated_data,
-                    current_threshold=current_threshold,
-                    plotter=plotter,
-                    sample_registration_date=sample_registration_date,
-                    model_version=model_version,
-                    pos_class=pos_class,
-                    plot_title=plot_title,
-                    plot_scale=plot_scale,
-                    series=series,
-                )
-    else:
-        evaluated_data = pv_evaluator.evaluate()
-        if evaluated_data is None:
-            print(
-                f"{Fore.RED}There is no enough data to "
-                f"compute any metrics!{Fore.RESET}"
-            )
-        else:
-            calculate_and_plot(
-                all_df=evaluated_data.all_df,
+            _process_and_plot(
                 evaluated_data=evaluated_data,
-                current_threshold=current_threshold,
                 plotter=plotter,
+                current_threshold=current_threshold,
                 sample_registration_date=sample_registration_date,
                 model_version=model_version,
                 pos_class=pos_class,
                 plot_title=plot_title,
                 plot_scale=plot_scale,
+                series=series,
             )
