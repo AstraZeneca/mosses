@@ -1132,13 +1132,27 @@ def calculate_heatmap_metrics(
         # PPV & FOR values fluctuate a lot;
         # It's important to smoothen the curves prior to recommended threshold calculations
         # Apply Savitzky-Golay filter with window size 5 and polynomial order 2
+        # Clean data by replacing NaN and inf values before filtering
+        pred_pos_clean = np.nan_to_num(
+            all_metrics_df_sorted.pred_pos_likelihood, 
+            nan=0.0, 
+            posinf=100.0, 
+            neginf=0.0
+        )
+        pred_neg_clean = np.nan_to_num(
+            all_metrics_df_sorted.pred_neg_likelihood,
+            nan=0.0,
+            posinf=100.0,
+            neginf=0.0
+        )
+        
         all_metrics_df_sorted["pred_pos_likelihood"] = savgol_filter(
-            all_metrics_df_sorted.pred_pos_likelihood,
+            pred_pos_clean,
             window_length=3,
             polyorder=2,
         )
         all_metrics_df_sorted["pred_neg_likelihood"] = savgol_filter(
-            all_metrics_df_sorted.pred_neg_likelihood,
+            pred_neg_clean,
             window_length=3,
             polyorder=2,
         )
