@@ -26,11 +26,7 @@ dependencies = [
     "jinja2",
     "imbalanced-learn",
     "pygad>=3.0",
-]
-
-[project.optional-dependencies]
-mpo = [
-    "matplotlib-venn",
+    "matplotlib-venn"
 ]
 
 [dependency-groups]
