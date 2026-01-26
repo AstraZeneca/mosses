@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mosses"
-version = "0.2.13"
+version = "0.3.0"
 description = "Set of functionalities to assess molecular property prediction models."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,7 +23,14 @@ dependencies = [
     "seaborn",
     "pyyaml",
     "statsmodels",
-    "jinja2"
+    "jinja2",
+    "imbalanced-learn",
+    "pygad>=3.0",
+]
+
+[project.optional-dependencies]
+mpo = [
+    "matplotlib-venn",
 ]
 
 [dependency-groups]
