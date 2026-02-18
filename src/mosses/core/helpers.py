@@ -137,7 +137,7 @@ def print_ppv_for_table(
         FOR at the recommended threshold.
     """
     msg = f"""
-    |  | Predicted Threshold | PPV % | FOR % |
+    |  | Prediction Threshold | PPV % | FOR % |
     | ------ | ----- | ----- | ----- |
     | Selected Experimental Threshold | {pre_threshold} | {ppv} | {for_val} |
     | Recommended Threshold | {rec_threshold} | {rec_ppv} | {rec_for} |
@@ -167,14 +167,14 @@ def print_unbiased_ppv_for_table(
     Parameters
     ----------
     threshold : float
-        The experimental or predicted threshold.
+        The experimental or prediction threshold.
     ppv : float
         The unbiased Positive Predictive Value (PPV) at the threshold.
     for_val : float
         The unbiased False Omission Rate (FOR) at the threshold.
     """
     msg = f"""
-    | Experimental = Predicted threshold | PPV % | FOR % |
+    | Experimental = Prediction threshold | PPV % | FOR % |
     | ----- | ----- | ----- |
     | {threshold} | {ppv} | {for_val} |
     """

@@ -1,3 +1,4 @@
+import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +9,8 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 from mosses.core.metrics import LikelihoodMetrics
 from mosses.core.metrics import LinePlotMetrics
+
+logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 
 
 class Plotter:
@@ -526,7 +529,7 @@ class Plotter:
             ax2 = ax.twinx()
             ax2.plot(threshold, obs, color="grey", marker="o")
 
-        ax.set_xlabel("Predicted threshold", fontweight="bold")
+        ax.set_xlabel("Prediction threshold", fontweight="bold")
         ax.set_ylabel("PPV & FOR (unbiased) - Likelihood% ", fontweight="bold")
         ax2.set_ylabel("% of compounds tested", fontweight="bold")
         ax = Plotter.reset_y_ticks(ax)
@@ -545,8 +548,8 @@ class Plotter:
         ax.legend(
             handles=my_handle,
             labels=[
-                "Likelihood to extract good compounds at each " "predicted threshold",
-                "Likelihood to discard good compounds at each " "predicted threshold",
+                "Likelihood to extract good compounds at each " "prediction threshold",
+                "Likelihood to discard good compounds at each " "prediction threshold",
                 "% of compounds tested (cumulative)",
             ],
             bbox_to_anchor=(0.5, -0.23),
@@ -712,7 +715,7 @@ class Plotter:
                 marker=".",
             )
 
-        ax.set_xlabel("Predicted threshold", fontweight="bold")
+        ax.set_xlabel("Prediction threshold", fontweight="bold")
         ax.set_ylabel(
             "PPV & FOR (using SET) - Likelihood% ",
             fontweight="bold",

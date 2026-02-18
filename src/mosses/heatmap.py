@@ -90,6 +90,9 @@ def project_heatmap_stats(
     # Calculate arrow length at the selected experimental threshold
     result_df['ArrowLength'] = result_df['PPV %'] - result_df['FOR %']
 
+    # Calculate predictive balance at optimized threshold
+    result_df['Predictive balance (PPV-FOR)'] = result_df['PPVopt %'] - result_df['FORopt %']
+
     # Assign model quality based on a set of predefined criteria
     result_df['Model Quality'] = result_df.apply(
         metrics_calculator.performance_class_set,
@@ -167,6 +170,7 @@ def project_heatmap_stats(
             'Opt Pred Threshold',
             'PPVopt %',
             'FORopt %',
+            'Predictive balance (PPV-FOR)',
             'Model Quality opt',
             'Time Dependant Stability Class',
             'Exp_Error (log)',
@@ -194,6 +198,7 @@ def project_heatmap_stats(
             'FOR %': 'Int64',
             'PPVopt %': 'Int64',
             'FORopt %': 'Int64',
+            'Predictive balance (PPV-FOR)': 'Int64',
         }
     )
     
@@ -217,7 +222,7 @@ def project_heatmap_stats(
         'PPV %': 'Likelihood to extract good compounds (PPV %) at threshold = SET',
         'FOR %': 'Likelihood to lose good compounds (FOR %) at threshold = SET',
         'Model Quality': 'Model Quality at threshold = SET',
-        'Opt Pred Threshold': 'Optimized Predicted Threshold for filtering',
+        'Opt Pred Threshold': 'Optimized Prediction Threshold for filtering',
         'PPVopt %': 'Likelihood to extract good compounds (PPV %) at optimized threshold',
         'FORopt %': 'Likelihood to lose good compounds (FOR %) at optimized threshold',
         'Model Quality opt': 'Model Quality at optimized threshold',

@@ -151,7 +151,7 @@ def calculate_and_plot(
         )
         print_note(f"\n --- \n ### Model usage advice {series_title_postfix}")
         print_note(
-            f"\n#### What predicted threshold gives best enrichment {series_title_postfix}"
+            f"\n#### What prediction threshold gives best enrichment {series_title_postfix}"
         )
         desired_project_threshold = threshold_metrics[
             threshold_metrics["threshold"] == current_threshold
