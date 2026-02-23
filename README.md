@@ -225,7 +225,11 @@ mpo.plot_best_fit_scatter(
 )
 
 # Correlation matrix
-mpo.plot_correlation_matrix(df[["LogD", "Solubility", "Clearance"]], title="Parameter Correlations")
+mpo.plot_parameter_correlation_matrix(
+    df,
+    columns=["LogD", "Solubility", "Clearance"],
+    title="Parameter Correlations",
+)
 
 # Compare multiple methods
 mpo.plot_comparison(
@@ -269,7 +273,9 @@ mpo.plot_comparison(
 |----------|-------------|
 | `plot_mpo_histogram(scores)` | Distribution of MPO scores |
 | `plot_best_fit_scatter(x, y)` | Scatter plot with regression |
-| `plot_correlation_matrix(df)` | Correlation heatmap |
+| `plot_parameter_correlation_matrix(df, columns)` | Correlation heatmap |
+| `plot_experimental_correlation_matrix(df, cols)` | Experimental parameter correlations |
+| `plot_predicted_correlation_matrix(df, cols)` | Predicted parameter correlations |
 | `plot_mutual_info(importance)` | Feature importance bar chart |
 | `plot_comparison(df, methods, ref)` | Side-by-side method comparison |
 | `plot_scoring_curves(config)` | Visualize sigmoid functions |

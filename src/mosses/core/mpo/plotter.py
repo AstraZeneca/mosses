@@ -403,42 +403,112 @@ def plot_mutual_info(
     return fig
 
 
-def plot_correlation_matrix(
+def plot_parameter_correlation_matrix(
     df: pd.DataFrame,
     columns: list[str],
-    cmap: str = "Blues",
+    parameter_names: list[str] | None = None,
+    cmap: str = "RdBu_r",
     title: str = "Correlation Matrix",
+    figsize: tuple[int, int] = (8, 7),
     show: bool = True,
 ) -> plt.Figure:
     """
-    Plot correlation heatmap for specified columns.
+    Plot a correlation heatmap for a set of parameter columns.
+
+    This is the **generic** correlation-matrix plotter for MPO analysis.
+    It accepts any list of columns (experimental *or* predicted) and
+    renders an annotated Seaborn heatmap with optional clean parameter
+    names as axis labels.
+
+    Use this function directly when you have a custom set of columns,
+    or call the thin convenience wrappers
+    :func:`plot_experimental_correlation_matrix` /
+    :func:`plot_predicted_correlation_matrix` which simply supply
+    sensible default titles.
 
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame containing the columns.
+        DataFrame containing the data columns.
     columns : list[str]
-        Columns to include in correlation matrix.
+        Column names to include in the correlation matrix.
+        Columns not present in *df* are silently skipped.
+    parameter_names : list[str] | None, optional
+        Human-readable display labels for the parameters (same order
+        as *columns*).  When ``None``, labels are derived by stripping
+        common suffixes (``_exp``, ``_pred``, …) via
+        ``_clean_column_labels``.
     cmap : str, optional
-        Colormap name (default: "Blues").
+        Matplotlib / Seaborn colormap name (default: ``"RdBu_r"``).
     title : str, optional
-        Plot title (default: "Correlation Matrix").
+        Plot title (default: ``"Correlation Matrix"``).
+    figsize : tuple[int, int], optional
+        Figure size in inches (default: ``(8, 7)``).
     show : bool, optional
-        Whether to display the plot (default: True).
+        Whether to call ``plt.show()`` (default: ``True``).
+        Set to ``False`` when embedding the figure in a notebook widget.
 
     Returns
     -------
     plt.Figure
         The matplotlib figure object.
+
+    Examples
+    --------
+    Experimental parameters:
+
+    >>> fig = plot_parameter_correlation_matrix(
+    ...     df,
+    ...     columns=["logD_exp", "sol_exp", "CL_exp"],
+    ...     parameter_names=["LogD", "Solubility", "Clearance"],
+    ...     title="Correlation Matrix of Experimental Parameters",
+    ... )
+
+    Predicted (in-silico) parameters:
+
+    >>> fig = plot_parameter_correlation_matrix(
+    ...     df,
+    ...     columns=["logD_pred", "sol_pred", "CL_pred"],
+    ...     parameter_names=["LogD", "Solubility", "Clearance"],
+    ...     title="Correlation Matrix of Predicted Parameters",
+    ... )
+
+    Mixed / custom selection:
+
+    >>> fig = plot_parameter_correlation_matrix(
+    ...     df,
+    ...     columns=["LogD", "Solubility", "Clearance", "Activity"],
+    ...     title="All Parameters Correlation",
+    ... )
     """
     valid_cols = [c for c in columns if c in df.columns]
+    if not valid_cols:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.text(
+            0.5, 0.5,
+            "No valid columns found",
+            ha="center", va="center", fontsize=12, color="#888",
+        )
+        ax.set_axis_off()
+        if show:
+            plt.show()
+        return fig
+
     corr_matrix = df[valid_cols].corr()
 
-    labels = [col.split()[0] for col in valid_cols]
+    # Build labels
+    if parameter_names is not None and len(parameter_names) == len(valid_cols):
+        labels = list(parameter_names)
+    else:
+        labels = _clean_column_labels(valid_cols)
 
-    fig, ax = plt.subplots(figsize=(8, 7))
+    corr_display = corr_matrix.copy()
+    corr_display.index = labels
+    corr_display.columns = labels
+
+    fig, ax = plt.subplots(figsize=figsize)
     sns.heatmap(
-        corr_matrix,
+        corr_display,
         annot=True,
         cmap=cmap,
         vmin=-1,
@@ -446,11 +516,13 @@ def plot_correlation_matrix(
         center=0,
         square=True,
         fmt=".2f",
+        linewidths=0.5,
+        linecolor="white",
         ax=ax,
     )
-    ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_yticklabels(labels, rotation=0)
-    ax.set_title(title)
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=10)
+    ax.set_yticklabels(labels, rotation=0, fontsize=10)
+    ax.set_title(title, fontsize=13, fontweight="bold", pad=12)
 
     plt.tight_layout()
 
@@ -458,6 +530,93 @@ def plot_correlation_matrix(
         plt.show()
 
     return fig
+
+
+def plot_experimental_correlation_matrix(
+    df: pd.DataFrame,
+    experimental_columns: list[str],
+    parameter_names: list[str] | None = None,
+    cmap: str = "RdBu_r",
+    title: str = "Correlation Matrix of Experimental Parameters",
+    figsize: tuple[int, int] = (8, 7),
+    show: bool = True,
+) -> plt.Figure:
+    """
+    Convenience wrapper for :func:`plot_parameter_correlation_matrix`
+    with a default title suited for **experimental** (observed) data.
+
+    See :func:`plot_parameter_correlation_matrix` for full parameter
+    documentation.
+    """
+    return plot_parameter_correlation_matrix(
+        df,
+        columns=experimental_columns,
+        parameter_names=parameter_names,
+        cmap=cmap,
+        title=title,
+        figsize=figsize,
+        show=show,
+    )
+
+
+def plot_predicted_correlation_matrix(
+    df: pd.DataFrame,
+    predicted_columns: list[str],
+    parameter_names: list[str] | None = None,
+    cmap: str = "RdBu_r",
+    title: str = "Correlation Matrix of Predicted Parameters",
+    figsize: tuple[int, int] = (8, 7),
+    show: bool = True,
+) -> plt.Figure:
+    """
+    Convenience wrapper for :func:`plot_parameter_correlation_matrix`
+    with a default title suited for **predicted** (in-silico) data.
+
+    See :func:`plot_parameter_correlation_matrix` for full parameter
+    documentation.
+    """
+    return plot_parameter_correlation_matrix(
+        df,
+        columns=predicted_columns,
+        parameter_names=parameter_names,
+        cmap=cmap,
+        title=title,
+        figsize=figsize,
+        show=show,
+    )
+
+
+def _clean_column_labels(columns: list[str]) -> list[str]:
+    """
+    Clean column names into readable labels.
+
+    Strips common suffixes like '_experimental', '_exp', '_predicted',
+    '_pred', ' experiment', ' prediction' and takes the first word
+    as a fallback.
+
+    Parameters
+    ----------
+    columns : list[str]
+        Raw column names.
+
+    Returns
+    -------
+    list[str]
+        Cleaned labels.
+    """
+    suffixes = [
+        "_experimental", "_exp", "_predicted", "_pred",
+        " experimental", " experiment", " prediction", " predicted",
+    ]
+    labels = []
+    for col in columns:
+        label = col
+        for suffix in suffixes:
+            if label.lower().endswith(suffix):
+                label = label[: -len(suffix)]
+                break
+        labels.append(label.strip())
+    return labels
 
 
 def plot_best_fit_scatter(
