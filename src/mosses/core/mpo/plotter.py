@@ -348,7 +348,8 @@ def plot_comparison(
 def plot_mutual_info(
     mi_df: pd.DataFrame,
     title: str = "Mutual Information",
-    color: str = "steelblue",
+    color: str = "#2196F3",
+    noise_threshold: float | None = None,
     show: bool = True,
 ) -> plt.Figure:
     """
@@ -361,7 +362,11 @@ def plot_mutual_info(
     title : str, optional
         Plot title (default: "Mutual Information").
     color : str, optional
-        Bar color (default: "steelblue").
+        Bar color for significant features (default: "#2196F3").
+        Features below *noise_threshold* are shown in grey.
+    noise_threshold : float | None, optional
+        When provided, draws a dashed red 95 %ile noise floor line and
+        greys out bars that fall below it.
     show : bool, optional
         Whether to display the plot (default: True).
 
@@ -370,36 +375,337 @@ def plot_mutual_info(
     plt.Figure
         The matplotlib figure object.
     """
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(16, 14))
 
-    # Clean labels
-    labels = [str(f).split()[0] for f in mi_df["Feature"]]
+    labels = [str(f) for f in mi_df["Feature"]]
+    mi_values = mi_df["Mutual Information"].values
+
+    # Colour bars: significant (above noise) vs insignificant
+    if noise_threshold is not None:
+        bar_colors = [
+            color if m > noise_threshold else "#BDBDBD" for m in mi_values
+        ]
+    else:
+        bar_colors = color
+
     bars = ax.bar(
-        range(len(mi_df)), mi_df["Mutual Information"], color=color, edgecolor="black"
+        range(len(mi_df)),
+        mi_values,
+        color=bar_colors,
+        edgecolor="white",
+        linewidth=0.5,
     )
 
+    # Noise floor line
+    if noise_threshold is not None:
+        ax.axhline(
+            noise_threshold,
+            color="red",
+            linestyle="--",
+            linewidth=1.5,
+            alpha=0.7,
+        )
+        ax.text(
+            0.98,
+            noise_threshold,
+            f" 95% noise = {noise_threshold:.3f}",
+            transform=ax.get_yaxis_transform(),
+            va="bottom",
+            ha="right",
+            fontsize=35,
+            color="red",
+            fontstyle="italic",
+        )
+
     # Annotate bars
-    for bar, score in zip(bars, mi_df["Mutual Information"]):
+    for bar, score in zip(bars, mi_values):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
+            bar.get_height() + 0.005,
             f"{score:.3f}",
             ha="center",
             va="bottom",
-            fontsize=10,
+            fontsize=30,
             fontweight="bold",
         )
 
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_ylabel("Mutual Information Score")
-    ax.set_title(title)
+    ax.set_ylabel("Mutual Information", fontsize=35, labelpad=12)
+    ax.set_title(title, fontsize=40, pad=12)
+    ax.tick_params(labelsize=35)
+
+    # Add headroom so bar labels and title don't overlap
+    y_max = mi_values.max() if len(mi_values) > 0 else 1.0
+    ax.set_ylim(top=y_max * 1.25)
 
     plt.tight_layout()
 
     if show:
         plt.show()
 
+    return fig
+
+
+def compute_vertical_threshold(
+    in_vitro: np.ndarray | pd.Series,
+    in_silico: np.ndarray | pd.Series,
+    horizontal_threshold: float,
+    ratio_top_compounds: float = 90.0,
+) -> float | None:
+    """
+    Calculate the in-silico MPO threshold that captures a given
+    percentage of compounds above the in-vitro MPO goal.
+
+    Parameters
+    ----------
+    in_vitro : array-like
+        In-vitro (Goal) MPO values.
+    in_silico : array-like
+        In-silico MPO values.
+    horizontal_threshold : float
+        The in-vitro MPO score threshold (green horizontal line).
+    ratio_top_compounds : float
+        Percentage of "good" compounds to capture (default 90%).
+        The vertical threshold is at the
+        ``(100 - ratio_top_compounds)``-th percentile of in-silico
+        scores among compounds above the horizontal threshold.
+
+    Returns
+    -------
+    float | None
+        The in-silico MPO threshold, or ``None`` if no compounds
+        exceed the horizontal threshold.
+    """
+    in_vitro = np.asarray(in_vitro)
+    in_silico = np.asarray(in_silico)
+    mask = in_vitro >= horizontal_threshold
+    if mask.sum() == 0:
+        return None
+    x_above = in_silico[mask]
+    percentile = 100.0 - ratio_top_compounds
+    return float(np.percentile(x_above, percentile))
+
+
+def plot_mpo_scatter_with_thresholds(
+    in_vitro: np.ndarray | pd.Series,
+    in_silico: np.ndarray | pd.Series,
+    horizontal_threshold: float | None = None,
+    vertical_threshold: float | None = None,
+    title: str = "In silico MPO vs In vitro MPO",
+    xlabel: str = "In silico MPO",
+    ylabel: str = "In vitro MPO",
+    figsize: tuple[int, int] = (11, 9),
+    show: bool = True,
+) -> plt.Figure:
+    """
+    Scatter plot of in-silico vs in-vitro MPO with threshold lines.
+
+    Axes
+    ----
+    X-axis = in-silico MPO (``in_silico``)
+    Y-axis = in-vitro / goal MPO (``in_vitro``)
+
+    Parameters
+    ----------
+    in_vitro : array-like
+        Y-axis values (in-vitro / goal MPO).
+    in_silico : array-like
+        X-axis values (in-silico MPO score).
+    horizontal_threshold : float | None
+        Green horizontal line at the in-vitro MPO goal score (y-axis).
+    vertical_threshold : float | None
+        Pink vertical line at the recommended in-silico MPO cutoff (x-axis).
+    title, xlabel, ylabel : str
+        Plot labels.
+    figsize : tuple[int, int]
+        Figure size (default ``(9, 8)``).
+    show : bool
+        Whether to call ``plt.show()``.
+
+    Returns
+    -------
+    plt.Figure
+    """
+    in_vitro = np.asarray(in_vitro, dtype=float)
+    in_silico = np.asarray(in_silico, dtype=float)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # X = in_silico, Y = in_vitro
+    # Colour points by quadrant
+    if horizontal_threshold is not None and vertical_threshold is not None:
+        above_h = in_vitro >= horizontal_threshold   # above goal (y-axis)
+        above_v = in_silico >= vertical_threshold    # right of threshold (x-axis)
+        colors = np.where(
+            above_h & above_v, "#4CAF50",        # upper-right → green  (true positive)
+            np.where(
+                ~above_h & ~above_v, "#BDBDBD",  # lower-left  → grey   (true negative)
+                np.where(
+                    above_h & ~above_v, "#FF9800",  # upper-left  → orange (missed)
+                    "#2196F3",                      # lower-right → blue   (false positive)
+                ),
+            ),
+        )
+        ax.scatter(in_silico, in_vitro, c=colors, alpha=0.7, s=40,
+                   edgecolors="white", linewidth=0.3, zorder=5)
+    else:
+        ax.scatter(in_silico, in_vitro, alpha=0.7, s=40, color="#2196F3",
+                   edgecolors="white", linewidth=0.3, zorder=5)
+
+    # --- Linear regression trend line ---
+    finite_mask = np.isfinite(in_silico) & np.isfinite(in_vitro)
+    if finite_mask.sum() >= 2:
+        slope, intercept = np.polyfit(in_silico[finite_mask], in_vitro[finite_mask], 1)
+        x_range = np.linspace(np.nanmin(in_silico), np.nanmax(in_silico), 200)
+        ax.plot(x_range, slope * x_range + intercept, color="red",
+                linewidth=1.5, alpha=0.8, zorder=4, label="Linear regression")
+
+    # --- Threshold lines ---
+    if horizontal_threshold is not None:
+        ax.axhline(horizontal_threshold, color="green", linestyle="--",
+                   linewidth=2, alpha=0.8, label=f"Goal MPO = {horizontal_threshold:.1f}")
+    if vertical_threshold is not None:
+        ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
+                   linewidth=2, alpha=0.8,
+                   label=f"In silico threshold = {vertical_threshold:.3f}")
+
+    ax.set_xlabel(xlabel, fontsize=25)
+    ax.set_ylabel(ylabel, fontsize=25)
+    ax.set_title(title, fontsize=28, pad=10)
+    ax.tick_params(labelsize=20)
+    ax.legend(fontsize=20, loc="upper left")
+    ax.grid(True, alpha=0.2)
+
+    plt.tight_layout()
+    if show:
+        plt.show()
+    return fig
+
+
+def compute_ppv_for_curve(
+    in_vitro: np.ndarray | pd.Series,
+    in_silico: np.ndarray | pd.Series,
+    horizontal_threshold: float,
+    n_points: int = 200,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute PPV and FOR as functions of the in-silico MPO threshold.
+
+    For each candidate threshold *t* along the in-silico score range:
+
+    - **Positive prediction**: in_silico >= t
+    - **True positive**: in_vitro >= horizontal_threshold
+
+    PPV = TP / (TP + FP)   — precision of the positive prediction
+    FOR = FN / (FN + TN)   — false omission rate among negatives
+
+    Parameters
+    ----------
+    in_vitro : array-like
+        In-vitro (goal) MPO values.
+    in_silico : array-like
+        In-silico MPO values.
+    horizontal_threshold : float
+        In-vitro MPO goal score.
+    n_points : int
+        Number of threshold points to evaluate.
+
+    Returns
+    -------
+    thresholds : np.ndarray
+        Array of in-silico threshold values.
+    ppv : np.ndarray
+        PPV at each threshold.
+    for_rate : np.ndarray
+        FOR at each threshold.
+    """
+    in_vitro = np.asarray(in_vitro, dtype=float)
+    in_silico = np.asarray(in_silico, dtype=float)
+    actual_positive = in_vitro >= horizontal_threshold
+
+    lo = np.nanmin(in_silico)
+    hi = np.nanmax(in_silico)
+    if lo == hi:
+        return np.array([lo]), np.array([np.nan]), np.array([np.nan])
+
+    thresholds = np.linspace(lo, hi, n_points)
+    ppv = np.full(n_points, np.nan)
+    for_rate = np.full(n_points, np.nan)
+
+    for i, t in enumerate(thresholds):
+        pred_pos = in_silico >= t
+        pred_neg = ~pred_pos
+        tp = (pred_pos & actual_positive).sum()
+        fp = (pred_pos & ~actual_positive).sum()
+        fn = (pred_neg & actual_positive).sum()
+        tn = (pred_neg & ~actual_positive).sum()
+
+        if tp + fp > 0:
+            ppv[i] = tp / (tp + fp)
+        if fn + tn > 0:
+            for_rate[i] = fn / (fn + tn)
+
+    return thresholds, ppv, for_rate
+
+
+def plot_ppv_for(
+    thresholds: np.ndarray,
+    ppv: np.ndarray,
+    for_rate: np.ndarray,
+    vertical_threshold: float | None = None,
+    title: str = "PPV & FOR vs In silico MPO threshold",
+    figsize: tuple[int, int] = (11, 9),
+    show: bool = True,
+) -> plt.Figure:
+    """
+    Plot PPV and FOR curves as a function of in-silico MPO threshold.
+
+    Parameters
+    ----------
+    thresholds : np.ndarray
+        In-silico MPO threshold values (x-axis).
+    ppv : np.ndarray
+        Positive Predictive Value at each threshold.
+    for_rate : np.ndarray
+        False Omission Rate at each threshold.
+    vertical_threshold : float | None
+        If provided, draws a vertical dashed line at this threshold.
+    title : str
+        Plot title.
+    figsize : tuple[int, int]
+        Figure size.
+    show : bool
+        Whether to call ``plt.show()``.
+
+    Returns
+    -------
+    plt.Figure
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.plot(thresholds, ppv, color="blue", linewidth=2, label="PPV", marker="", zorder=3)
+    ax.plot(thresholds, for_rate, color="orange", linewidth=2, label="FOR", marker="", zorder=3)
+
+    ax.fill_between(thresholds, ppv, alpha=0.10, color="blue")
+    ax.fill_between(thresholds, for_rate, alpha=0.10, color="orange")
+
+    if vertical_threshold is not None:
+        ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
+                   linewidth=2, alpha=0.8,
+                   label=f"Threshold = {vertical_threshold:.3f}")
+
+    ax.set_xlabel("In silico MPO threshold", fontsize=25)
+    ax.set_ylabel("Rate", fontsize=25)
+    ax.set_title(title, fontsize=30, pad=10)
+    ax.tick_params(labelsize=20)
+    ax.set_ylim(-0.05, 1.05)
+    ax.legend(fontsize=14, loc="upper left")
+    ax.grid(True, alpha=0.2)
+
+    plt.tight_layout()
+    if show:
+        plt.show()
     return fig
 
 
@@ -507,7 +813,7 @@ def plot_parameter_correlation_matrix(
     corr_display.columns = labels
 
     fig, ax = plt.subplots(figsize=figsize)
-    sns.heatmap(
+    heatmap = sns.heatmap(
         corr_display,
         annot=True,
         cmap=cmap,
@@ -519,10 +825,18 @@ def plot_parameter_correlation_matrix(
         linewidths=0.5,
         linecolor="white",
         ax=ax,
+        annot_kws={"size": 19},
+        cbar_kws={"shrink": 0.8},
     )
-    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=10)
-    ax.set_yticklabels(labels, rotation=0, fontsize=10)
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=12)
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_yticklabels(labels, rotation=0)
+    ax.tick_params(labelsize=18)
+    ax.set_title(title, fontsize=18, pad=12)
+
+    # Increase colorbar tick font size
+    cbar = heatmap.collections[0].colorbar
+    if cbar is not None:
+        cbar.ax.tick_params(labelsize=16)
 
     plt.tight_layout()
 
