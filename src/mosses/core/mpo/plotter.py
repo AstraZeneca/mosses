@@ -9,12 +9,17 @@ This module provides plotting functions for MPO analysis, including:
     - Correlation heatmaps
     - Best fit scatter plots
     - ROC curves
+    - Enrichment-style likelihood plots
 """
+from dataclasses import dataclass
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.lines import Line2D
 from matplotlib_venn import venn2
+from scipy.signal import savgol_filter
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import auc, r2_score, roc_curve
 
@@ -408,7 +413,7 @@ def plot_mutual_info(
         ax.text(
             0.98,
             noise_threshold,
-            f" 95% noise = {noise_threshold:.3f}",
+            f" 95% noise = {noise_threshold:.2f}",
             transform=ax.get_yaxis_transform(),
             va="bottom",
             ha="right",
@@ -422,7 +427,7 @@ def plot_mutual_info(
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.005,
-            f"{score:.3f}",
+            f"{score:.2f}",
             ha="center",
             va="bottom",
             fontsize=30,
@@ -495,7 +500,7 @@ def plot_mpo_scatter_with_thresholds(
     title: str = "In silico MPO vs In vitro MPO",
     xlabel: str = "In silico MPO",
     ylabel: str = "In vitro MPO",
-    figsize: tuple[int, int] = (11, 9),
+    figsize: tuple[int, int] = (9, 7),
     show: bool = True,
 ) -> plt.Figure:
     """
@@ -570,11 +575,11 @@ def plot_mpo_scatter_with_thresholds(
                    linewidth=2, alpha=0.8,
                    label=f"In silico threshold = {vertical_threshold:.3f}")
 
-    ax.set_xlabel(xlabel, fontsize=25)
-    ax.set_ylabel(ylabel, fontsize=25)
-    ax.set_title(title, fontsize=28, pad=10)
-    ax.tick_params(labelsize=20)
-    ax.legend(fontsize=20, loc="upper left")
+    ax.set_xlabel(xlabel, fontsize=13)
+    ax.set_ylabel(ylabel, fontsize=13)
+    ax.set_title(title, fontsize=14, pad=10)
+    ax.tick_params(labelsize=11)
+    ax.legend(fontsize=11, loc="upper left")
     ax.grid(True, alpha=0.2)
 
     plt.tight_layout()
@@ -684,26 +689,319 @@ def plot_ppv_for(
     """
     fig, ax = plt.subplots(figsize=figsize)
 
-    ax.plot(thresholds, ppv, color="blue", linewidth=2, label="PPV", marker="", zorder=3)
-    ax.plot(thresholds, for_rate, color="orange", linewidth=2, label="FOR", marker="", zorder=3)
+    ax.plot(thresholds, ppv * 100, color="blue", linewidth=2, label="PPV", marker="", zorder=3)
+    ax.plot(thresholds, for_rate * 100, color="orange", linewidth=2, label="FOR", marker="", zorder=3)
 
-    ax.fill_between(thresholds, ppv, alpha=0.10, color="blue")
-    ax.fill_between(thresholds, for_rate, alpha=0.10, color="orange")
+    ax.fill_between(thresholds, ppv * 100, alpha=0.10, color="blue")
+    ax.fill_between(thresholds, for_rate * 100, alpha=0.10, color="orange")
 
     if vertical_threshold is not None:
         ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
                    linewidth=2, alpha=0.8,
                    label=f"Threshold = {vertical_threshold:.3f}")
 
-    ax.set_xlabel("In silico MPO threshold", fontsize=25)
-    ax.set_ylabel("Rate", fontsize=25)
-    ax.set_title(title, fontsize=30, pad=10)
-    ax.tick_params(labelsize=20)
-    ax.set_ylim(-0.05, 1.05)
-    ax.legend(fontsize=14, loc="upper left")
+    ax.set_xlabel("User defined in silico MPO, threshold", fontsize=20)
+    ax.set_ylabel("Likelihood (%)", fontsize=20)
+    ax.set_title(title, fontsize=16, pad=10, wrap=True)
+    ax.tick_params(labelsize=15)
+    ax.set_ylim(-5, 105)
+    ax.legend(fontsize=12, loc="upper left")
     ax.grid(True, alpha=0.2)
 
     plt.tight_layout()
+    if show:
+        plt.show()
+    return fig
+
+
+# ====================================================================
+#  Enrichment-style likelihood plot  (PPV, FOR, CI, arrows,
+#  % compounds tested on secondary axis)
+# ====================================================================
+
+
+@dataclass
+class MpoLikelihoodMetrics:
+    """Precomputed metrics for the MPO enrichment-style likelihood plot."""
+
+    filtered_ppv: np.ndarray
+    filtered_for: np.ndarray
+    compounds_tested: np.ndarray
+    ppv_ci_lower: np.ndarray
+    ppv_ci_upper: np.ndarray
+    for_ci_lower: np.ndarray
+    for_ci_upper: np.ndarray
+    arrow: tuple[float, float, float, float]
+    desired_ppv: float | str
+    desired_for: float | str
+
+
+def compute_mpo_likelihood_metrics(
+    in_vitro: np.ndarray | pd.Series,
+    in_silico: np.ndarray | pd.Series,
+    horizontal_threshold: float,
+    vertical_threshold: float | None = None,
+    n_points: int = 200,
+) -> tuple[np.ndarray, MpoLikelihoodMetrics]:
+    """Compute enrichment-style likelihood metrics for MPO analysis.
+
+    For each candidate threshold *t* along the in-silico score range
+    this function computes PPV, FOR, and the cumulative percentage of
+    compounds that would be tested.  The raw curves are smoothed with
+    a Savitzky-Golay filter, and 95 % confidence bands are estimated
+    using the standard-error approach (same methodology as the model
+    evaluation tab).
+
+    Parameters
+    ----------
+    in_vitro : array-like
+        In-vitro (Goal) MPO values.
+    in_silico : array-like
+        In-silico MPO values.
+    horizontal_threshold : float
+        In-vitro MPO goal score.
+    vertical_threshold : float | None
+        Selected in-silico threshold (for the pink arrow).
+    n_points : int
+        Number of threshold points to evaluate.
+
+    Returns
+    -------
+    thresholds : np.ndarray
+        Array of in-silico threshold values.
+    metrics : MpoLikelihoodMetrics
+        Precomputed curves, CI bounds, arrow data.
+    """
+    in_vitro = np.asarray(in_vitro, dtype=float)
+    in_silico = np.asarray(in_silico, dtype=float)
+    actual_positive = in_vitro >= horizontal_threshold
+    n_total = len(in_silico)
+
+    lo, hi = float(np.nanmin(in_silico)), float(np.nanmax(in_silico))
+    if lo == hi:
+        return (
+            np.array([lo]),
+            MpoLikelihoodMetrics(
+                filtered_ppv=np.array([np.nan]),
+                filtered_for=np.array([np.nan]),
+                compounds_tested=np.array([100.0]),
+                ppv_ci_lower=np.array([np.nan]),
+                ppv_ci_upper=np.array([np.nan]),
+                for_ci_lower=np.array([np.nan]),
+                for_ci_upper=np.array([np.nan]),
+                arrow=(-100.0, -100.0, -100.0, -100.0),
+                desired_ppv="N/A",
+                desired_for="N/A",
+            ),
+        )
+
+    thresholds = np.linspace(lo, hi, n_points)
+    ppv = np.full(n_points, np.nan)
+    for_rate = np.full(n_points, np.nan)
+    compounds_tested = np.full(n_points, np.nan)
+
+    for i, t in enumerate(thresholds):
+        pred_pos = in_silico >= t
+        pred_neg = ~pred_pos
+        tp = (pred_pos & actual_positive).sum()
+        fp = (pred_pos & ~actual_positive).sum()
+        fn = (pred_neg & actual_positive).sum()
+        tn = (pred_neg & ~actual_positive).sum()
+
+        if tp + fp > 0:
+            ppv[i] = tp / (tp + fp) * 100.0
+        if fn + tn > 0:
+            for_rate[i] = fn / (fn + tn) * 100.0
+        compounds_tested[i] = pred_pos.sum() / n_total * 100.0
+
+    # Replace NaN / inf before smoothing
+    ppv = np.nan_to_num(ppv, nan=0.0, posinf=100.0, neginf=0.0)
+    for_rate = np.nan_to_num(for_rate, nan=0.0, posinf=100.0, neginf=0.0)
+    compounds_tested = np.nan_to_num(
+        compounds_tested, nan=0.0, posinf=100.0, neginf=0.0,
+    )
+
+    # Savitzky-Golay smoothing
+    if len(thresholds) >= 3:
+        ppv_s = savgol_filter(ppv, window_length=3, polyorder=2)
+        for_s = savgol_filter(for_rate, window_length=3, polyorder=2)
+        ct_s = savgol_filter(compounds_tested, window_length=3, polyorder=2)
+    else:
+        ppv_s, for_s, ct_s = ppv, for_rate, compounds_tested
+
+    # 95 % CI (SE-based, same approach as model-eval tab)
+    se_ppv = np.nanstd(ppv_s) / np.sqrt(len(ppv_s))
+    se_for = np.nanstd(for_s) / np.sqrt(len(for_s))
+    ci_ppv_upper = ppv_s + 1.96 * se_ppv
+    ci_ppv_lower = ppv_s - 1.96 * se_ppv
+    ci_for_upper = for_s + 1.96 * se_for
+    ci_for_lower = for_s - 1.96 * se_for
+
+    # Best threshold (max conservative gap: ci_ppv_lower − ci_for_upper)
+    distances = ci_ppv_lower - ci_for_upper
+    valid = np.isfinite(distances)
+    if valid.any():
+        idx = int(np.argmax(np.where(valid, distances, -np.inf)))
+        arrow = (
+            float(distances[idx]),
+            float(thresholds[idx]),
+            float(ppv_s[idx]),
+            float(for_s[idx]),
+        )
+    else:
+        arrow = (-100.0, -100.0, -100.0, -100.0)
+
+    # PPV / FOR at the user-selected threshold
+    desired_ppv: float | str = "N/A"
+    desired_for: float | str = "N/A"
+    if vertical_threshold is not None:
+        idx_sel = int(np.argmin(np.abs(thresholds - vertical_threshold)))
+        desired_ppv = float(ppv_s[idx_sel])
+        desired_for = float(for_s[idx_sel])
+
+    metrics = MpoLikelihoodMetrics(
+        filtered_ppv=ppv_s,
+        filtered_for=for_s,
+        compounds_tested=ct_s,
+        ppv_ci_lower=ci_ppv_lower,
+        ppv_ci_upper=ci_ppv_upper,
+        for_ci_lower=ci_for_lower,
+        for_ci_upper=ci_for_upper,
+        arrow=arrow,
+        desired_ppv=desired_ppv,
+        desired_for=desired_for,
+    )
+    return thresholds, metrics
+
+
+def plot_mpo_likelihood(
+    thresholds: np.ndarray,
+    metrics: MpoLikelihoodMetrics,
+    vertical_threshold: float | None = None,
+    title: str = "Enrichment Plot",
+    figsize: tuple[int, int] = (11, 9),
+    show: bool = True,
+) -> plt.Figure:
+    """Plot PPV & FOR enrichment-style likelihood curves for MPO.
+
+    Replicates the visual style of the model-evaluation tab's
+    enrichment plot: turquoise PPV with CI band, indigo FOR with CI
+    band, grey ``% compounds tested`` on a secondary y-axis, and
+    double-headed arrows indicating the best threshold (green) and
+    the user-selected threshold (pink).
+
+    Parameters
+    ----------
+    thresholds : np.ndarray
+        In-silico MPO threshold values (x-axis).
+    metrics : MpoLikelihoodMetrics
+        Precomputed enrichment metrics.
+    vertical_threshold : float | None
+        Selected in-silico threshold (pink arrow position).
+    title : str
+        Plot title.
+    figsize : tuple[int, int]
+        Figure size.
+    show : bool
+        Whether to call ``plt.show()``.
+
+    Returns
+    -------
+    plt.Figure
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.canvas.header_visible = False
+
+    # --- PPV curve + CI band ---
+    ax.plot(
+        thresholds, metrics.filtered_ppv,
+        color="turquoise", linewidth=2, zorder=3,
+    )
+    ax.fill_between(
+        thresholds, metrics.ppv_ci_lower, metrics.ppv_ci_upper,
+        color="turquoise", alpha=0.2,
+    )
+
+    # --- FOR curve + CI band ---
+    ax.plot(
+        thresholds, metrics.filtered_for,
+        color="indigo", linewidth=2, zorder=3,
+    )
+    ax.fill_between(
+        thresholds, metrics.for_ci_lower, metrics.for_ci_upper,
+        color="indigo", alpha=0.2,
+    )
+
+    # --- Arrows ---
+    if metrics.filtered_ppv.size and metrics.filtered_for.size:
+        _, max_thresh, max_ppv, max_for = metrics.arrow
+        if max_thresh != -100:
+            ax.annotate(
+                text="",
+                xy=(max_thresh, max_for),
+                xytext=(max_thresh, max_ppv),
+                arrowprops=dict(arrowstyle="<->", color="green", lw=2),
+            )
+        if (
+            vertical_threshold is not None
+            and metrics.desired_ppv != "N/A"
+            and metrics.desired_for != "N/A"
+        ):
+            ax.annotate(
+                text="",
+                xy=(vertical_threshold, metrics.desired_for),
+                xytext=(vertical_threshold, metrics.desired_ppv),
+                arrowprops=dict(arrowstyle="<->", color="plum", lw=2),
+            )
+
+    # --- Secondary y-axis: % compounds tested ---
+    ax2 = ax.twinx()
+    ax2.plot(
+        thresholds, metrics.compounds_tested,
+        color="grey", linewidth=2, zorder=2,
+    )
+
+    # --- Labels & formatting ---
+    ax.set_xlabel("User defined in silico MPO, threshold", fontsize=14)
+    ax.set_ylabel("PPV & FOR (%)", fontsize=14)
+    ax2.set_ylabel("% of compounds tested", fontsize=14)
+    ax.set_title(title, fontsize=16, pad=8)
+    ax.tick_params(labelsize=11)
+    ax2.tick_params(labelsize=11)
+
+    # --- Legend (below plot) ---
+    handles = [
+        Line2D([], [], color="turquoise", linewidth=2),
+        Line2D([], [], color="indigo", linewidth=2),
+        Line2D([], [], color="grey", linewidth=2),
+    ]
+    labels = [
+        "PPV – Likelihood to extract good compounds",
+        "FOR – Likelihood to discard good compounds",
+        "% of compounds tested (cumulative)",
+    ]
+    if metrics.arrow[1] != -100:
+        handles.append(
+            Line2D([], [], color="green", linewidth=2),
+        )
+        labels.append("Best threshold (max PPV − FOR gap)")
+    if vertical_threshold is not None:
+        handles.append(
+            Line2D([], [], color="plum", linewidth=2),
+        )
+        labels.append(f"Selected threshold = {vertical_threshold:.3f}")
+
+    ax.legend(
+        handles=handles,
+        labels=labels,
+        bbox_to_anchor=(0.5, -0.15),
+        loc="upper center",
+        fontsize=11,
+    )
+    ax.grid(True, alpha=0.2)
+    plt.tight_layout()
+    fig.subplots_adjust(bottom=0.22)
+
     if show:
         plt.show()
     return fig
