@@ -501,6 +501,7 @@ def plot_mpo_scatter_with_thresholds(
     xlabel: str = "In silico MPO",
     ylabel: str = "In vitro MPO",
     figsize: tuple[int, int] = (9, 7),
+    vertical_threshold_label: str | None = None,
     show: bool = True,
 ) -> plt.Figure:
     """
@@ -573,7 +574,11 @@ def plot_mpo_scatter_with_thresholds(
     if vertical_threshold is not None:
         ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
                    linewidth=2, alpha=0.8,
-                   label=f"In silico threshold = {vertical_threshold:.3f}")
+                   label=(
+                       vertical_threshold_label
+                       if vertical_threshold_label is not None
+                       else f"In silico threshold = {vertical_threshold:.3f}"
+                   ))
 
     ax.set_xlabel(xlabel, fontsize=13)
     ax.set_ylabel(ylabel, fontsize=13)
@@ -880,6 +885,8 @@ def plot_mpo_likelihood(
     vertical_threshold: float | None = None,
     title: str = "Enrichment Plot",
     figsize: tuple[int, int] = (11, 9),
+    selected_threshold_label: str | None = None,
+    xlabel: str = "User defined in silico MPO, threshold",
     show: bool = True,
 ) -> plt.Figure:
     """Plot PPV & FOR enrichment-style likelihood curves for MPO.
@@ -962,7 +969,7 @@ def plot_mpo_likelihood(
     )
 
     # --- Labels & formatting ---
-    ax.set_xlabel("User defined in silico MPO, threshold", fontsize=14)
+    ax.set_xlabel(xlabel, fontsize=14)
     ax.set_ylabel("PPV & FOR (%)", fontsize=14)
     ax2.set_ylabel("% of compounds tested", fontsize=14)
     ax.set_title(title, fontsize=16, pad=8)
@@ -984,12 +991,16 @@ def plot_mpo_likelihood(
         handles.append(
             Line2D([], [], color="green", linewidth=2),
         )
-        labels.append("Best threshold (max PPV − FOR gap)")
+        labels.append("Highest Predictive Balance (PPV-FOR)")
     if vertical_threshold is not None:
         handles.append(
             Line2D([], [], color="plum", linewidth=2),
         )
-        labels.append(f"Selected threshold = {vertical_threshold:.3f}")
+        labels.append(
+            selected_threshold_label
+            if selected_threshold_label is not None
+            else f"Selected threshold = {vertical_threshold:.3f}"
+        )
 
     ax.legend(
         handles=handles,
