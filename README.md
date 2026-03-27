@@ -167,8 +167,8 @@ stats = mpo.evaluate_mpo(
 # Access metrics
 print(f"Enrichment: {stats.enrichment:.2f}")
 print(f"Spearman correlation: {stats.spearman_correlation:.3f}")
-print(f"PPV: {stats.ppv:.2%}")
-print(f"FOR: {stats.for_rate:.2%}")
+print(f"F1 score: {stats.f1_score:.3f}")
+print(f"RMSE: {stats.rmse:.3f}")
 ```
 
 ### Feature Importance Analysis
@@ -262,9 +262,9 @@ mpo.plot_comparison(
 
 | Function | Description |
 |----------|-------------|
-| `calculate_enrichment(df, mpo_col, ref_col, top_n)` | Enrichment factor calculation |
-| `calculate_spearman_correlation(x, y)` | Spearman rank correlation |
-| `find_top_n_percent_ids(df, col, percent)` | Get IDs of top N% compounds |
+| `calculate_enrichment(percent_top, df, ref_col, method_col)` | Enrichment factor calculation |
+| `calculate_spearman_correlation(df, col1, col2)` | Spearman rank correlation |
+| `find_top_n_percent_ids(percent_top, df, score_col)` | Get IDs of top N% compounds |
 | `collect_stats(...)` | Comprehensive statistics collection |
 
 #### Plotting Functions
