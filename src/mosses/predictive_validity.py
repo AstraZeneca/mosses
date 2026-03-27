@@ -66,6 +66,7 @@ def calculate_and_plot(
         print_note(
             f"\n#### Predicted vs Experimental Values (prospective) {series_title_postfix}"
         )
+        scatter_plot_generated = False
         if len(all_df["observed"]) > 0 and len(all_df["predicted"]) > 0:
             scatter_metrics_plot_title = f"{plot_title} - Prospective Validation Set"
             scatter_metrics = metrics_calculator.compute_scatter_metrics(
@@ -88,6 +89,7 @@ def calculate_and_plot(
                 desired_threshold=current_threshold,
                 plot_title=scatter_metrics_plot_title,
             )
+            scatter_plot_generated = True
         else:
             print(
                 f"{Fore.RED}No sufficient datapoints to generate "
@@ -219,9 +221,10 @@ def calculate_and_plot(
         )
 
     else:
-        if (evaluated_data.test_count > 0 and series is None) or (
-            len(evaluated_data.all_df) != 0 and series is not None
-        ):
+        if (
+            (evaluated_data.test_count > 0 and series is None)
+            or (len(evaluated_data.all_df) != 0 and series is not None)
+        ) and not scatter_plot_generated:
             print_note("\n --- \n ### Predicted vs Experimental Values")
             plotter.scatter_plot(
                 df=evaluated_data.test_df,
@@ -233,7 +236,7 @@ def calculate_and_plot(
                 f"in the prospective validation set!"
                 f"Not possible to compute any metrics!{Fore.RESET}"
             )
-        else:
+        elif not scatter_plot_generated:
             print(
                 f"{Fore.RED}There is no data to display. Test data is empty"
                 f"Not possible to compute any metrics!{Fore.RESET}"
