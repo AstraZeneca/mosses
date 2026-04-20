@@ -47,11 +47,16 @@ class PredictiveValidityEvaluator:
             Column name to filter data by series, by default None.
         """
         self.df = df
-        self.pos_class = pos_class
+        self.pos_class = self._validate_pos_class(pos_class)
         self.desired_threshold = desired_threshold
         self.training_set_col = training_set_col
         self.scale = scale
         self.series_column = series_column
+
+    def _validate_pos_class(self, pos_class):
+        if pos_class not in ("<=", ">"):
+            raise Exception(f"Invalid `pos_class` (got {pos_class})")
+        return pos_class
 
     def prepare_data(
         self,

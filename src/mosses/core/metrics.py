@@ -192,7 +192,6 @@ def longest_arrow(
 
     if df.empty:
         return -100, -100, -100, -100
-    # distances = df["ppv"] - df["for"]
     distances = df["ci_ppv_lower"] - df["ci_for_upper"]
     idx = np.argmax(distances)
 
@@ -517,7 +516,7 @@ def compute_lineplot_metrics(
     # Clean data by replacing NaN and inf values
     metric1 = np.nan_to_num(metric1, nan=0.0, posinf=100.0, neginf=0.0)
     metric2 = np.nan_to_num(metric2, nan=0.0, posinf=100.0, neginf=0.0)
-    
+
     filt_metric1 = savgol_filter(metric1, window_length=3, polyorder=2)
     filt_metric2 = savgol_filter(metric2, window_length=3, polyorder=2)
 
@@ -573,11 +572,6 @@ def compute_likelihood_metrics(
             - desired_pred_neg: formatted desired
               predicted negative likelihood.
     """
-    # Clean data by replacing NaN and inf values
-    pred_pos_likelihood = np.nan_to_num(pred_pos_likelihood, nan=0.0, posinf=100.0, neginf=0.0)
-    pred_neg_likelihood = np.nan_to_num(pred_neg_likelihood, nan=0.0, posinf=100.0, neginf=0.0)
-    obs = np.nan_to_num(obs, nan=0.0, posinf=1000.0, neginf=0.0)
-    
     filt_pred_pos = savgol_filter(
         pred_pos_likelihood,
         window_length=3,
@@ -1134,18 +1128,12 @@ def calculate_heatmap_metrics(
         # Apply Savitzky-Golay filter with window size 5 and polynomial order 2
         # Clean data by replacing NaN and inf values before filtering
         pred_pos_clean = np.nan_to_num(
-            all_metrics_df_sorted.pred_pos_likelihood, 
-            nan=0.0, 
-            posinf=100.0, 
-            neginf=0.0
+            all_metrics_df_sorted.pred_pos_likelihood, nan=0.0, posinf=100.0, neginf=0.0
         )
         pred_neg_clean = np.nan_to_num(
-            all_metrics_df_sorted.pred_neg_likelihood,
-            nan=0.0,
-            posinf=100.0,
-            neginf=0.0
+            all_metrics_df_sorted.pred_neg_likelihood, nan=0.0, posinf=100.0, neginf=0.0
         )
-        
+
         all_metrics_df_sorted["pred_pos_likelihood"] = savgol_filter(
             pred_pos_clean,
             window_length=3,
