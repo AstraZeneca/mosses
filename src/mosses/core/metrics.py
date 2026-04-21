@@ -693,45 +693,37 @@ def compute_threshold_metrics(
             df["predicted_binaries"] = df["predicted"].map(lambda x: int(x > thresh))
 
             obs_pos_subset = df[df["predicted"] > thresh]
-            if len(obs_pos_subset) > 10:
-                pred_pos_likelihood = (
-                    len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
-                    / len(obs_pos_subset)
-                ) * 100
-                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
-            else:
-                pred_pos_likelihood = math.nan
+            pred_pos_likelihood = (
+                len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
+                / len(obs_pos_subset)
+            ) * 100
+            pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
 
             obs_neg_subset = df[df["predicted"] <= thresh]
-            if len(obs_neg_subset) > 10:
-                pred_neg_likelihood = (
-                    len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
-                    / len(obs_neg_subset)
-                ) * 100
-                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
-            else:
-                pred_neg_likelihood = math.nan
-        else:
+            pred_neg_likelihood = (
+                len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
+                / len(obs_neg_subset)
+            ) * 100
+            pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
+
+        elif pos_class == "<=":
             df["observed_binaries"] = df["observed"].map(lambda x: int(x <= thresh))
             df["predicted_binaries"] = df["predicted"].map(lambda x: int(x <= thresh))
             obs_pos_subset = df[df["predicted"] <= thresh]
-            if len(obs_pos_subset) > 10:
-                pred_pos_likelihood = (
-                    len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
-                    / len(obs_pos_subset)
-                ) * 100
-                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
-            else:
-                pred_pos_likelihood = math.nan
+            pred_pos_likelihood = (
+                len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
+                / len(obs_pos_subset)
+            ) * 100
+            pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
             obs_neg_subset = df[df["predicted"] > thresh]
-            if len(obs_neg_subset) > 10:
-                pred_neg_likelihood = (
-                    len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
-                    / len(obs_neg_subset)
-                ) * 100
-                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
-            else:
-                pred_neg_likelihood = math.nan
+            pred_neg_likelihood = (
+                len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
+                / len(obs_neg_subset)
+            ) * 100
+            pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
+
+        else:
+            raise Exception(f"Invalid `pos_class` (got {pos_class}.)")
 
         metrics_df = calculate_all_metrics(df)
         row_df = pd.DataFrame(
