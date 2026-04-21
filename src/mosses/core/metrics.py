@@ -654,6 +654,7 @@ def compute_threshold_metrics(
     thresholds: np.ndarray,
     desired_threshold: float,
     pos_class: str,
+    minimum_eval_percentage: int = 10,
 ) -> pd.DataFrame | None:
     """
     For each threshold (excluding the first one)
@@ -685,42 +686,58 @@ def compute_threshold_metrics(
     all_metrics_df = pd.DataFrame()
 
     for thresh in thresholds[1:]:
-        num_obs = len(df[df["predicted"] <= thresh])
-        compounds_percent = (num_obs / len(df)) * 100
+        num_obs = len(df[df["predicted"] <= thresh])  # this is always <= thresh
+        total_cpds = len(df)
+        compounds_percent = (num_obs / total_cpds) * 100
 
         if pos_class == ">":
             df["observed_binaries"] = df["observed"].map(lambda x: int(x > thresh))
             df["predicted_binaries"] = df["predicted"].map(lambda x: int(x > thresh))
 
             obs_pos_subset = df[df["predicted"] > thresh]
-            pred_pos_likelihood = (
-                len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
-                / len(obs_pos_subset)
-            ) * 100
-            pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
+            ratio_pos_subset = round(len(obs_pos_subset) / total_cpds * 100)
+            pred_pos_likelihood = math.nan
+            if ratio_pos_subset >= minimum_eval_percentage:
+                pred_pos_likelihood = (
+                    len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
+                    / len(obs_pos_subset)
+                ) * 100
+                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
 
             obs_neg_subset = df[df["predicted"] <= thresh]
-            pred_neg_likelihood = (
-                len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
-                / len(obs_neg_subset)
-            ) * 100
-            pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
+            ratio_neg_subset = round(len(obs_neg_subset) / total_cpds * 100)
+            pred_neg_likelihood = math.nan
+            if ratio_neg_subset >= minimum_eval_percentage:
+                pred_neg_likelihood = (
+                    len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
+                    / len(obs_neg_subset)
+                ) * 100
+                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
 
         elif pos_class == "<=":
             df["observed_binaries"] = df["observed"].map(lambda x: int(x <= thresh))
             df["predicted_binaries"] = df["predicted"].map(lambda x: int(x <= thresh))
+
             obs_pos_subset = df[df["predicted"] <= thresh]
-            pred_pos_likelihood = (
-                len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
-                / len(obs_pos_subset)
-            ) * 100
-            pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
+            ratio_pos_subset = round(len(obs_pos_subset) / total_cpds * 100)
+            pred_pos_likelihood = math.nan
+            if ratio_pos_subset >= minimum_eval_percentage:
+                pred_pos_likelihood = (
+                    len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
+                    / len(obs_pos_subset)
+                ) * 100
+                pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
+
             obs_neg_subset = df[df["predicted"] > thresh]
-            pred_neg_likelihood = (
-                len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
-                / len(obs_neg_subset)
-            ) * 100
-            pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
+            ratio_neg_subset = round(len(obs_neg_subset) / total_cpds * 100)
+            pred_neg_likelihood = math.nan
+            if ratio_neg_subset >= minimum_eval_percentage:
+                obs_neg_subset = df[df["predicted"] > thresh]
+                pred_neg_likelihood = (
+                    len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
+                    / len(obs_neg_subset)
+                ) * 100
+                pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
 
         else:
             raise Exception(f"Invalid `pos_class` (got {pos_class}.)")
