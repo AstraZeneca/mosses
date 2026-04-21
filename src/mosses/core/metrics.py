@@ -670,6 +670,7 @@ def compute_threshold_metrics(
     thresholds : np.ndarray
     desired_threshold : float
     pos_class : str
+    minimum_eval_percentage: int
 
     Returns
     -------
@@ -686,7 +687,10 @@ def compute_threshold_metrics(
     all_metrics_df = pd.DataFrame()
 
     for thresh in thresholds[1:]:
-        num_obs = len(df[df["predicted"] <= thresh])  # this is always <= thresh
+        # always <= thresh as num_obs must always
+        # grow as we interate through `thresholds`
+        num_obs = len(df[df["predicted"] <= thresh])
+
         total_cpds = len(df)
         compounds_percent = (num_obs / total_cpds) * 100
 
@@ -927,6 +931,7 @@ def calculate_heatmap_metrics(
     selected_threshold: float,
     scale: str,
     exp_error: float,
+    minimum_eval_percentage: int = 10,
 ) -> pd.DataFrame:
 
     """
@@ -950,27 +955,30 @@ def calculate_heatmap_metrics(
         Either 'log' or 'linear'
     exp_error: float
         Experimental errors calculated based on replicates (n >= 3)
+    minimum_eval_percentage: int
+        Minimum percentage of compounds to allow the evaluation
 
     Returns
     -------
     selected_rec_threshold_df_all:
         A data frame with all the calulated metrics to be displayed on the heatmap
     """
-    class_annotation = "below" if pos_class == "<" else "above"
+    class_annotation = "<=" if pos_class == "<=" else ">"
 
     compounds_below_thresh = len(df_all[df_all.observed <= selected_threshold])
     compounds_above_thresh = len(df_all[df_all.observed > selected_threshold])
 
     if len(df_all) > 0:
-        if pos_class == "<":
+        if pos_class == "<=":
             ratio_good_cpds = compounds_below_thresh / (
                 compounds_below_thresh + compounds_above_thresh
             )
-        else:
+        elif pos_class == ">":
             ratio_good_cpds = compounds_above_thresh / (
                 compounds_below_thresh + compounds_above_thresh
             )
-
+        else:
+            raise Exception(f"Invalid `pos_class` (got {pos_class}).")
         ratio_good_cpds = round(ratio_good_cpds * 100)
     else:
         ratio_good_cpds = 0
@@ -1001,7 +1009,9 @@ def calculate_heatmap_metrics(
                 # Identifying the predicted likelihood to extract good compounds
                 # at a selected experimental threshold
                 observations_pos_extract = df[df.predicted > thresh]
-                if len(observations_pos_extract) > 10:
+                pos_percentage = round(len(observations_pos_extract) / len(df) * 100)
+                pred_pos_likelihood = np.nan
+                if pos_percentage > minimum_eval_percentage:
                     pred_pos_likelihood = (
                         len(
                             observations_pos_extract[
@@ -1012,13 +1022,13 @@ def calculate_heatmap_metrics(
                         / len(observations_pos_extract)
                     ) * 100
                     pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
-                else:
-                    pred_pos_likelihood = np.nan
 
                 # Identifying the likelihood to remove good compounds at a
                 # selected experimental threshold
                 observations_neg_extract = df[df.predicted <= thresh]
-                if len(observations_neg_extract) > 10:
+                neg_percentage = round(len(observations_neg_extract) / len(df) * 100)
+                pred_neg_likelihood = np.nan
+                if neg_percentage > minimum_eval_percentage:
                     pred_neg_likelihood = (
                         len(
                             observations_neg_extract[
@@ -1030,8 +1040,6 @@ def calculate_heatmap_metrics(
                         * 100
                     )
                     pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
-                else:
-                    pred_neg_likelihood = np.nan
 
                 all_metrics = pd.DataFrame(
                     [
@@ -1049,14 +1057,17 @@ def calculate_heatmap_metrics(
                     ]
                 )
                 all_metrics_df = pd.concat([all_metrics_df, all_metrics], axis=0)
-            else:
+
+            elif pos_class == "<=":
                 df["observed_binaries"] = df["observed"].map(lambda x: int(x <= thresh))
                 df["predicted_binaries"] = df["predicted"].map(
                     lambda x: int(x <= thresh)
                 )
 
                 observations_pos_extract = df[df.predicted <= thresh]
-                if len(observations_pos_extract) > 10:
+                pos_percentage = round(len(observations_pos_extract) / len(df) * 100)
+                pred_pos_likelihood = np.nan
+                if pos_percentage > minimum_eval_percentage:
                     pred_pos_likelihood = (
                         len(
                             observations_pos_extract[
@@ -1067,11 +1078,11 @@ def calculate_heatmap_metrics(
                         / len(observations_pos_extract)
                     ) * 100
                     pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
-                else:
-                    pred_pos_likelihood = np.nan
 
                 observations_neg_extract = df[df.predicted > thresh]
-                if len(observations_neg_extract) > 10:
+                neg_percentage = round(len(observations_neg_extract) / len(df) * 100)
+                pred_neg_likelihood = np.nan
+                if neg_percentage > minimum_eval_percentage:
                     pred_neg_likelihood = (
                         len(
                             observations_neg_extract[
@@ -1082,8 +1093,6 @@ def calculate_heatmap_metrics(
                         / len(observations_neg_extract)
                     ) * 100
                     pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
-                else:
-                    pred_neg_likelihood = np.nan
 
                 all_metrics = pd.DataFrame(
                     [
@@ -1101,6 +1110,9 @@ def calculate_heatmap_metrics(
                     ]
                 )
                 all_metrics_df = pd.concat([all_metrics_df, all_metrics], axis=0)
+
+            else:
+                raise Exception(f"Invalid `pos_class` (got {pos_class}).")
 
         all_metrics_df.columns = [
             "model",
@@ -1327,7 +1339,7 @@ def generate_heatmap_table(
     training_set_column: str
         Column that includes 'train/test' annotations for each compound
     pos_class: str
-        Either '>' or '<' symbol that is used to define class annotations
+        Either '>' or '<=' symbol that is used to define class annotations
     selected_threshold: float
         Selected experimental threshold to be used for PPV & FOR calculations
     series_column : str
