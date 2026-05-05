@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from mosses.core.metrics import apply_operation
 
 
 @dataclass
@@ -25,6 +26,8 @@ class PredictiveValidityEvaluator:
         training_set_col: str,
         scale: str = "log",
         series_column: str | None = None,
+        op_exp: str | None = None,
+        threshold_transformed: bool = False,
     ) -> None:
         """
         Initialize the PredictiveValidityEvaluator.
@@ -52,9 +55,15 @@ class PredictiveValidityEvaluator:
         self.training_set_col = training_set_col
         self.scale = scale
         self.series_column = series_column
+        self.op_exp = op_exp
+        self.threshold_transformed = threshold_transformed
 
     def _validate_pos_class(self, pos_class):
-        if pos_class not in ("<=", ">"):
+        # Accept both UI-facing labels ("<", ">") and canonical inclusive
+        # forms ("<=", ">="). All forms are interpreted with inclusive
+        # positive-class semantics (the threshold value belongs to the
+        # positive / target-met side).
+        if pos_class not in ("<", "<=", ">", ">="):
             raise Exception(f"Invalid `pos_class` (got {pos_class})")
         return pos_class
 
@@ -105,6 +114,13 @@ class PredictiveValidityEvaluator:
             ),
             errors="coerce",
         )
+        # When the training_set_column is a sentinel meaning "all compounds
+        # are prospective" (e.g. "All are prospective") or simply doesn't
+        # exist in the data, synthesise a column where every row is "test"
+        # so that split_train_test() treats the entire dataset as the test set.
+        if training_set_col not in self.df.columns:
+            self.df[training_set_col] = "test"
+
         columns = [
             "Compound Name",
             "observed",
@@ -122,6 +138,14 @@ class PredictiveValidityEvaluator:
         if self.series_column is not None:
             columns.append(self.series_column)
             drop_na_columns.append(self.series_column)
+
+        # Deduplicate while preserving order: callers may legitimately pass the
+        # same column name for several roles (e.g. assay-evaluation models reuse
+        # the model-version column as the sample-registration-date column).
+        # Without this, ``self.df[columns]`` would produce duplicate-labeled
+        # columns and downstream ``df[col]`` lookups would return a DataFrame
+        # instead of a Series.
+        columns = list(dict.fromkeys(columns))
 
         self.df = self.df[columns].dropna(subset=drop_na_columns)
 
@@ -172,7 +196,7 @@ class PredictiveValidityEvaluator:
         float
             The ratio of good compounds.
         """
-        if self.pos_class == "<":
+        if self.pos_class in ("<", "<="):
             return below_count / (below_count + above_count)
         return above_count / (below_count + above_count)
 
@@ -238,8 +262,13 @@ class PredictiveValidityEvaluator:
         if test_count == 0 and train_count == 0:
             return None
 
-        below_count = len(df[df["observed"] <= self.desired_threshold])
-        above_count = len(df[df["observed"] > self.desired_threshold])
+        # When threshold is in transformed space, compare transformed observed
+        if self.threshold_transformed and self.op_exp and self.op_exp != "None":
+            obs_cmp = apply_operation(df["observed"].values, self.op_exp)
+        else:
+            obs_cmp = df["observed"].values
+        below_count = int((obs_cmp <= self.desired_threshold).sum())
+        above_count = int((obs_cmp > self.desired_threshold).sum())
 
         good_cpds_percent = self.get_percent(
             ratio_num=self.get_ratio_good_cpds(below_count, above_count)

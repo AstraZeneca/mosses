@@ -15,6 +15,96 @@ from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
 
+def _safe_savgol(
+    arr: np.ndarray, window_length: int = 3, polyorder: int = 2,
+) -> np.ndarray:
+    """Apply savgol_filter only on finite values, preserving NaN positions."""
+    out = np.full_like(arr, np.nan, dtype=float)
+    mask = np.isfinite(arr)
+    if mask.sum() >= window_length:
+        out[mask] = savgol_filter(arr[mask], window_length=window_length, polyorder=polyorder)
+    elif mask.any():
+        out[mask] = arr[mask]
+    return out
+
+
+# ---------------------------------------------------------------------------
+#  Per-column operation helpers
+# ---------------------------------------------------------------------------
+
+def apply_operation(values: np.ndarray, operation: str) -> np.ndarray:
+    """Apply a named transform to an array of values.
+
+    Supported operations: "None", "Log", "Negative Log", "Negative", "Negative Log uM".
+    """
+    if operation in (None, "None", "none"):
+        return values
+    if operation in ("Log", "log"):
+        return np.log10(values)
+    if operation in ("Negative Log", "negative log"):
+        return -np.log10(values)
+    if operation in ("Negative Log uM",):
+        # pIC50 from µM: -log10(value_µM * 1e-6) = 6 - log10(value_µM)
+        return 6 - np.log10(values)
+    if operation in ("Negative", "negative"):
+        return -values
+    return values
+
+
+def invert_operation_scalar(value: float, operation: str) -> float:
+    """Invert a single transformed value back to original space."""
+    if operation in (None, "None", "none"):
+        return value
+    if operation in ("Log", "log"):
+        return 10 ** value
+    if operation in ("Negative Log", "negative log"):
+        return 10 ** (-value)
+    if operation in ("Negative Log uM",):
+        # Inverse of pIC50-from-µM: value_µM = 10^(6 - pIC50)
+        return 10 ** (6 - value)
+    if operation in ("Negative", "negative"):
+        return -value
+    return value
+
+
+def needs_log_axis(operation: str) -> bool:
+    """Return True if the operation implies a log-style axis."""
+    return operation in ("Log", "log", "Negative Log", "negative log", "Negative Log uM")
+
+
+# ---------------------------------------------------------------------------
+#  Aim / pos_class normalization
+# ---------------------------------------------------------------------------
+#
+# The UI / stored config uses ``"<"`` and ``">"`` as user-facing labels for
+# the Aim direction. Internally these are interpreted with **inclusive**
+# positive-class semantics:
+#
+#   * ``"<"``  -> positive class = ``value <= threshold`` (canonical: ``"<="``)
+#   * ``">"``  -> positive class = ``value >= threshold`` (canonical: ``">="``)
+#
+# i.e. the threshold value itself always belongs to the positive / target-met
+# side. All branches below operate on the canonical form returned by
+# :func:`_normalize_pos_class` so callers may pass any of ``"<"``, ``"<="``,
+# ``">"`` or ``">="``.
+def _normalize_pos_class(pos_class: str) -> str:
+    """Return canonical inclusive form (``"<="`` or ``">="``)."""
+    if pos_class in ("<", "<="):
+        return "<="
+    if pos_class in (">", ">="):
+        return ">="
+    raise Exception(f"Invalid `pos_class` (got {pos_class}).")
+
+
+def _resolve_ops(scale: str, op_exp: str | None, op_pred: str | None) -> tuple[str, str]:
+    """Derive per-column operations from legacy *scale* when ops are not provided."""
+    if op_exp is None:
+        op_exp = "Log" if scale == "log" else "None"
+    if op_pred is None:
+        op_pred = "Log" if scale == "log" else "None"
+    return op_exp, op_pred
+
+
 @dataclass
 class ScatterMetrics:
     r2: float
@@ -50,6 +140,8 @@ def rmse_score(
     obs: np.ndarray,
     pred: np.ndarray,
     scale: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
 ) -> float:
     """
     Compute the Root Mean Squared Error (RMSE)
@@ -68,17 +160,26 @@ def rmse_score(
     """
 
     if scale == "log":
-        obs = obs[obs != 0]
-        pred = pred[pred != 0]
-        return round(math.sqrt(mean_squared_error(np.log10(obs), np.log10(pred))), 2)
-
-    return round(math.sqrt(mean_squared_error(obs, pred)), 2)
+        mask = (obs != 0) & (pred != 0)
+        obs = obs[mask]
+        pred = pred[mask]
+    oe, pe = _resolve_ops(scale, op_exp, op_pred)
+    # Only exclude zeros from columns that actually need log transforms
+    _mask = np.ones(len(obs), dtype=bool)
+    if needs_log_axis(oe):
+        _mask &= obs != 0
+    if needs_log_axis(pe):
+        _mask &= pred != 0
+    obs = obs[_mask]
+    pred = pred[_mask]
+    return round(math.sqrt(mean_squared_error(apply_operation(obs, oe), apply_operation(pred, pe))), 2)
 
 
 def thresh_selection(
     preds: np.ndarray,
     desired_threshold: float,
     scale: str,
+    op_pred: str | None = None,
 ) -> tuple[float, float, np.ndarray]:
     """
     Generate a sequence of thresholds based on the given prediction values.
@@ -97,7 +198,8 @@ def thresh_selection(
         - **thresholds (np.ndarray)** : An array of
         threshold values including `desired_threshold`.
     """
-    if scale == "log":
+    _, pe = _resolve_ops(scale, None, op_pred)
+    if needs_log_axis(pe):
         preds = preds[(preds != 0)]
         min_thresh = np.log10(min(preds))
         max_thresh = np.log10(max(preds))
@@ -435,6 +537,8 @@ def aggregate_model_stability_data(
     df: pd.DataFrame,
     scale: str,
     model_version_col: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
 ) -> pd.DataFrame:
     """
     Aggregates data to compute RMSE and compound
@@ -467,10 +571,23 @@ def aggregate_model_stability_data(
         lambda x: x.strftime("%b %Y") if pd.notnull(x) else None
     )
 
+    # If the model_version column does not contain parseable dates (e.g.
+    # assay-evaluation models reuse an "Ibis First Insert Date" column whose
+    # values are full ``%d-%b-%Y`` strings rather than the
+    # ``<version>-<date>`` shape this aggregator was built for), no group keys
+    # survive. ``groupby(...).apply(...)`` over zero groups returns an empty
+    # DataFrame with no columns, which then fails the ``agg_df["rmse"] = ...``
+    # assignment. Return an empty result so the caller's ``len(...) > 1``
+    # guard skips the model-stability subsection gracefully.
+    if df["model_month_year"].notna().sum() == 0:
+        return pd.DataFrame(
+            columns=["rmse", "r2", "no_of_cpds", "model_version", "datetime"]
+        )
+
     grouped = df.groupby("model_month_year")
     agg_df = pd.DataFrame()
     agg_df["rmse"] = grouped.apply(
-        lambda x: rmse_score(x["observed"], x["predicted"], scale),
+        lambda x: rmse_score(x["observed"], x["predicted"], scale, op_exp=op_exp, op_pred=op_pred),
     )
     agg_df["r2"] = grouped.apply(
         lambda x: r2_score(x["observed"], x["predicted"]),
@@ -493,7 +610,8 @@ def aggregate_model_stability_data(
 
 
 def compute_lineplot_metrics(
-    threshold: np.ndarray, metric1: np.ndarray, metric2: np.ndarray, scale: str
+    threshold: np.ndarray, metric1: np.ndarray, metric2: np.ndarray, scale: str,
+    op_pred: str | None = None,
 ) -> LinePlotMetrics:
     """
     Compute threshold metrics for line plotting.
@@ -513,14 +631,14 @@ def compute_lineplot_metrics(
         the longest arrow values, uncertainty estimates for the metrics,
         and the formatted desired metric values.
     """
-    # Clean data by replacing NaN and inf values
-    metric1 = np.nan_to_num(metric1, nan=0.0, posinf=100.0, neginf=0.0)
-    metric2 = np.nan_to_num(metric2, nan=0.0, posinf=100.0, neginf=0.0)
+    # NaN values in metric1/metric2 mark thresholds where the 10%-criterion
+    # was not met.  Smooth only the finite subset so longest_arrow's dropna()
+    # constrains the arrow to the valid plotted region (no fake zeros).
+    filt_metric1 = _safe_savgol(metric1)
+    filt_metric2 = _safe_savgol(metric2)
 
-    filt_metric1 = savgol_filter(metric1, window_length=3, polyorder=2)
-    filt_metric2 = savgol_filter(metric2, window_length=3, polyorder=2)
-
-    if scale == "log":
+    _, pe = _resolve_ops(scale, None, op_pred)
+    if needs_log_axis(pe):
         logged_threshold = np.log10(threshold)
         ci_metrics = metrics_ci(logged_threshold, filt_metric1, filt_metric2)
         arrow = longest_arrow(logged_threshold, filt_metric1, filt_metric2, ci_metrics)
@@ -546,6 +664,7 @@ def compute_likelihood_metrics(
     pred_neg_likelihood: np.ndarray,
     desired_threshold_df: pd.DataFrame,
     scale: str,
+    op_pred: str | None = None,
 ) -> LikelihoodMetrics:
     """
     Compute metrics needed for likelihood plotting.
@@ -572,19 +691,12 @@ def compute_likelihood_metrics(
             - desired_pred_neg: formatted desired
               predicted negative likelihood.
     """
-    filt_pred_pos = savgol_filter(
-        pred_pos_likelihood,
-        window_length=3,
-        polyorder=2,
-    )
-    filt_pred_neg = savgol_filter(
-        pred_neg_likelihood,
-        window_length=3,
-        polyorder=2,
-    )
-    obs = savgol_filter(obs, window_length=3, polyorder=2)
+    filt_pred_pos = _safe_savgol(pred_pos_likelihood)
+    filt_pred_neg = _safe_savgol(pred_neg_likelihood)
+    obs = _safe_savgol(obs)
 
-    if scale == "log":
+    _, pe = _resolve_ops(scale, None, op_pred)
+    if needs_log_axis(pe):
         logged_threshold = np.log10(threshold)
         ci_metrics = metrics_ci(logged_threshold, filt_pred_pos, filt_pred_neg)
         max_dist, max_thresh, max_ppv, max_for = longest_arrow(
@@ -616,7 +728,7 @@ def compute_likelihood_metrics(
             ci_metrics,
         )
 
-        likelihood_value_for_nan = 0
+        likelihood_value_for_nan = "N/A"
 
         desired_threshold_df["pred_pos_likelihood"] = (
             likelihood_value_for_nan
@@ -655,6 +767,7 @@ def compute_threshold_metrics(
     desired_threshold: float,
     pos_class: str,
     minimum_eval_percentage: int = 10,
+    op_exp: str | None = None,
 ) -> pd.DataFrame | None:
     """
     For each threshold (excluding the first one)
@@ -686,6 +799,17 @@ def compute_threshold_metrics(
     """
     all_metrics_df = pd.DataFrame()
 
+    pos_class = _normalize_pos_class(pos_class)
+
+    # When op_exp is provided, the desired_threshold is in transformed space.
+    # Compare transformed observed values against it.
+    _oe = op_exp if op_exp and op_exp != "None" else None
+    if _oe:
+        obs_for_threshold = apply_operation(df["observed"].values, _oe)
+    else:
+        obs_for_threshold = df["observed"].values
+    obs_series = pd.Series(obs_for_threshold, index=df.index)
+
     for thresh in thresholds[1:]:
         # always <= thresh as num_obs must always
         # grow as we interate through `thresholds`
@@ -694,26 +818,26 @@ def compute_threshold_metrics(
         total_cpds = len(df)
         compounds_percent = (num_obs / total_cpds) * 100
 
-        if pos_class == ">":
-            df["observed_binaries"] = df["observed"].map(lambda x: int(x > thresh))
-            df["predicted_binaries"] = df["predicted"].map(lambda x: int(x > thresh))
+        if pos_class == ">=":
+            df["observed_binaries"] = df["observed"].map(lambda x: int(x >= thresh))
+            df["predicted_binaries"] = df["predicted"].map(lambda x: int(x >= thresh))
 
-            obs_pos_subset = df[df["predicted"] > thresh]
+            obs_pos_subset = df[df["predicted"] >= thresh]
             ratio_pos_subset = round(len(obs_pos_subset) / total_cpds * 100)
             pred_pos_likelihood = math.nan
             if ratio_pos_subset >= minimum_eval_percentage:
                 pred_pos_likelihood = (
-                    len(obs_pos_subset[obs_pos_subset["observed"] > desired_threshold])
+                    len(obs_pos_subset[obs_series.loc[obs_pos_subset.index] >= desired_threshold])
                     / len(obs_pos_subset)
                 ) * 100
                 pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
 
-            obs_neg_subset = df[df["predicted"] <= thresh]
+            obs_neg_subset = df[df["predicted"] < thresh]
             ratio_neg_subset = round(len(obs_neg_subset) / total_cpds * 100)
             pred_neg_likelihood = math.nan
             if ratio_neg_subset >= minimum_eval_percentage:
                 pred_neg_likelihood = (
-                    len(obs_neg_subset[obs_neg_subset["observed"] > desired_threshold])
+                    len(obs_neg_subset[obs_series.loc[obs_neg_subset.index] >= desired_threshold])
                     / len(obs_neg_subset)
                 ) * 100
                 pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
@@ -727,7 +851,7 @@ def compute_threshold_metrics(
             pred_pos_likelihood = math.nan
             if ratio_pos_subset >= minimum_eval_percentage:
                 pred_pos_likelihood = (
-                    len(obs_pos_subset[obs_pos_subset["observed"] <= desired_threshold])
+                    len(obs_pos_subset[obs_series.loc[obs_pos_subset.index] <= desired_threshold])
                     / len(obs_pos_subset)
                 ) * 100
                 pred_pos_likelihood = int(round(pred_pos_likelihood, 0))
@@ -736,9 +860,8 @@ def compute_threshold_metrics(
             ratio_neg_subset = round(len(obs_neg_subset) / total_cpds * 100)
             pred_neg_likelihood = math.nan
             if ratio_neg_subset >= minimum_eval_percentage:
-                obs_neg_subset = df[df["predicted"] > thresh]
                 pred_neg_likelihood = (
-                    len(obs_neg_subset[obs_neg_subset["observed"] <= desired_threshold])
+                    len(obs_neg_subset[obs_series.loc[obs_neg_subset.index] <= desired_threshold])
                     / len(obs_neg_subset)
                 ) * 100
                 pred_neg_likelihood = int(round(pred_neg_likelihood, 0))
@@ -792,6 +915,8 @@ def compute_time_weighted_scores(
     model_version_col: str,
     discount_factor: float,
     scale: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
 ) -> tuple[list[str], np.ndarray, np.ndarray]:
     """
     Compute time-weighted similarity and correlation scores over time.
@@ -822,11 +947,16 @@ def compute_time_weighted_scores(
         df["model_version_date"],
         errors="coerce",
     )
-    if scale == "log":
+    oe, pe = _resolve_ops(scale, op_exp, op_pred)
+    if needs_log_axis(oe) and needs_log_axis(pe):
         df = df[((df["observed"] != 0) & (df["predicted"] != 0))]
-        df[["observed", "predicted"]] == df[["observed", "predicted"]].apply(np.log)
-    else:
-        df[["observed", "predicted"]] == df[["observed", "predicted"]]
+    elif needs_log_axis(oe):
+        df = df[df["observed"] != 0]
+    elif needs_log_axis(pe):
+        df = df[df["predicted"] != 0]
+    if needs_log_axis(oe) or needs_log_axis(pe):
+        df["observed"] = apply_operation(df["observed"].values, oe)
+        df["predicted"] = apply_operation(df["predicted"].values, pe)
 
     df_sorted = df.sort_values(by="model_version_date")
 
@@ -885,6 +1015,8 @@ def compute_time_weighted_scores(
 def compute_scatter_metrics(
     df: pd.DataFrame,
     scale: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
 ) -> dict:
     """
     Compute scatter plot metrics: Pearson r², R² score, and RMSE.
@@ -904,13 +1036,15 @@ def compute_scatter_metrics(
             - 'r2': R² (float)
             - 'rmse': RMSE (float)
     """
-    if scale == "log":
+    oe, pe = _resolve_ops(scale, op_exp, op_pred)
+    if needs_log_axis(oe) and needs_log_axis(pe):
         df = df[((df["observed"] != 0) & (df["predicted"] != 0))]
-        obs = np.log10(df["observed"])
-        pred = np.log10(df["predicted"])
-    else:
-        obs = df["observed"]
-        pred = df["predicted"]
+    elif needs_log_axis(oe):
+        df = df[df["observed"] != 0]
+    elif needs_log_axis(pe):
+        df = df[df["predicted"] != 0]
+    obs = apply_operation(df["observed"].values, oe)
+    pred = apply_operation(df["predicted"].values, pe)
 
     r2_val = r2_score(obs, pred)
     r2_val_mod = 0.0 if r2_val < 0.0 else r2_val
@@ -932,6 +1066,9 @@ def calculate_heatmap_metrics(
     scale: str,
     exp_error: float,
     minimum_eval_percentage: int = 10,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+    threshold_transformed: bool = False,
 ) -> pd.DataFrame:
 
     """
@@ -963,23 +1100,34 @@ def calculate_heatmap_metrics(
     selected_rec_threshold_df_all:
         A data frame with all the calulated metrics to be displayed on the heatmap
     """
-    class_annotation = "<=" if pos_class == "<=" else ">"
+    pos_class = _normalize_pos_class(pos_class)
+    # Keep the user-facing notation in the displayed "Aim" column ("<" / ">").
+    class_annotation = "<" if pos_class == "<=" else ">"
 
-    compounds_below_thresh = len(df_all[df_all.observed <= selected_threshold])
-    compounds_above_thresh = len(df_all[df_all.observed > selected_threshold])
+    # For assay evaluation, pre-transform data into the configured space.
+    # All downstream logic then works with "linear" data that is already
+    # in the target comparison space.
+    if threshold_transformed:
+        df = df.copy()
+        df["predicted"] = apply_operation(df["predicted"].values, op_pred)
+        df["observed"] = apply_operation(df["observed"].values, op_exp)
+        df_all = df_all.copy()
+        df_all["observed"] = apply_operation(df_all["observed"].values, op_exp)
+        # Override ops/scale so downstream code sees linear data
+        scale = "linear"
+        op_exp = None
+        op_pred = None
 
     if len(df_all) > 0:
+        _obs_all = df_all["observed"].values
+        # Inclusive positive-class semantics:
+        #   pos_class "<=" -> good if observed <= selected_threshold
+        #   pos_class ">=" -> good if observed >= selected_threshold
         if pos_class == "<=":
-            ratio_good_cpds = compounds_below_thresh / (
-                compounds_below_thresh + compounds_above_thresh
-            )
-        elif pos_class == ">":
-            ratio_good_cpds = compounds_above_thresh / (
-                compounds_below_thresh + compounds_above_thresh
-            )
+            good_cpds = int((_obs_all <= selected_threshold).sum())
         else:
-            raise Exception(f"Invalid `pos_class` (got {pos_class}).")
-        ratio_good_cpds = round(ratio_good_cpds * 100)
+            good_cpds = int((_obs_all >= selected_threshold).sum())
+        ratio_good_cpds = round(good_cpds / len(df_all) * 100)
     else:
         ratio_good_cpds = 0
 
@@ -994,29 +1142,44 @@ def calculate_heatmap_metrics(
             preds=df.predicted,
             desired_threshold=selected_threshold,
             scale=scale,
+            op_pred=op_pred,
         )
+
+        # Transform observed for threshold comparison when needed.
+        # For assay eval (threshold_transformed), data was pre-transformed above
+        # and op_exp is now None, so _oe_loop will be None and _obs_h is just
+        # the already-transformed df["observed"]. For model eval, threshold is
+        # in raw space so no transform is applied.
+        _oe_loop = op_exp if (threshold_transformed and op_exp and op_exp != "None") else None
+        if _oe_loop:
+            _obs_h = pd.Series(apply_operation(df["observed"].values, _oe_loop), index=df.index)
+        else:
+            _obs_h = df["observed"]
 
         # Exclude the first threshold, as there wouldn't be many compounds
         # below the minimal threshold - Generated statistics can be misleading
         for thresh in thresholds_selection[1:]:
-            if pos_class == ">":
+            if pos_class == ">=":
                 # Mapping to binaries based on different thresholds
-                df["observed_binaries"] = df["observed"].map(lambda x: int(x > thresh))
+                df["observed_binaries"] = df["observed"].map(lambda x: int(x >= thresh))
                 df["predicted_binaries"] = df["predicted"].map(
-                    lambda x: int(x > thresh)
+                    lambda x: int(x >= thresh)
                 )
 
                 # Identifying the predicted likelihood to extract good compounds
                 # at a selected experimental threshold
-                observations_pos_extract = df[df.predicted > thresh]
+                observations_pos_extract = df[df.predicted >= thresh]
                 pos_percentage = round(len(observations_pos_extract) / len(df) * 100)
                 pred_pos_likelihood = np.nan
-                if pos_percentage > minimum_eval_percentage:
+                # Use ``>=`` to match `compute_threshold_metrics` so the
+                # heatmap and Predictive Validation pages drop the same
+                # low-data swept thresholds from the longest-arrow search.
+                if pos_percentage >= minimum_eval_percentage:
                     pred_pos_likelihood = (
                         len(
                             observations_pos_extract[
-                                observations_pos_extract["observed"]
-                                > selected_threshold
+                                _obs_h.loc[observations_pos_extract.index]
+                                >= selected_threshold
                             ]
                         )
                         / len(observations_pos_extract)
@@ -1025,15 +1188,15 @@ def calculate_heatmap_metrics(
 
                 # Identifying the likelihood to remove good compounds at a
                 # selected experimental threshold
-                observations_neg_extract = df[df.predicted <= thresh]
+                observations_neg_extract = df[df.predicted < thresh]
                 neg_percentage = round(len(observations_neg_extract) / len(df) * 100)
                 pred_neg_likelihood = np.nan
-                if neg_percentage > minimum_eval_percentage:
+                if neg_percentage >= minimum_eval_percentage:
                     pred_neg_likelihood = (
                         len(
                             observations_neg_extract[
-                                observations_neg_extract["observed"]
-                                > selected_threshold
+                                _obs_h.loc[observations_neg_extract.index]
+                                >= selected_threshold
                             ]
                         )
                         / len(observations_neg_extract)
@@ -1067,11 +1230,11 @@ def calculate_heatmap_metrics(
                 observations_pos_extract = df[df.predicted <= thresh]
                 pos_percentage = round(len(observations_pos_extract) / len(df) * 100)
                 pred_pos_likelihood = np.nan
-                if pos_percentage > minimum_eval_percentage:
+                if pos_percentage >= minimum_eval_percentage:
                     pred_pos_likelihood = (
                         len(
                             observations_pos_extract[
-                                observations_pos_extract["observed"]
+                                _obs_h.loc[observations_pos_extract.index]
                                 <= selected_threshold
                             ]
                         )
@@ -1082,11 +1245,11 @@ def calculate_heatmap_metrics(
                 observations_neg_extract = df[df.predicted > thresh]
                 neg_percentage = round(len(observations_neg_extract) / len(df) * 100)
                 pred_neg_likelihood = np.nan
-                if neg_percentage > minimum_eval_percentage:
+                if neg_percentage >= minimum_eval_percentage:
                     pred_neg_likelihood = (
                         len(
                             observations_neg_extract[
-                                observations_neg_extract["observed"]
+                                _obs_h.loc[observations_neg_extract.index]
                                 <= selected_threshold
                             ]
                         )
@@ -1146,48 +1309,64 @@ def calculate_heatmap_metrics(
 
         # PPV & FOR values fluctuate a lot;
         # It's important to smoothen the curves prior to recommended threshold calculations
-        # Apply Savitzky-Golay filter with window size 5 and polynomial order 2
-        # Clean data by replacing NaN and inf values before filtering
-        pred_pos_clean = np.nan_to_num(
-            all_metrics_df_sorted.pred_pos_likelihood, nan=0.0, posinf=100.0, neginf=0.0
-        )
-        pred_neg_clean = np.nan_to_num(
-            all_metrics_df_sorted.pred_neg_likelihood, nan=0.0, posinf=100.0, neginf=0.0
-        )
+        # Apply Savitzky-Golay filter with window size 3 and polynomial order 2.
+        #
+        # NaN handling: a NaN in pred_pos_likelihood / pred_neg_likelihood at a
+        # given swept threshold means "not enough compounds in that subset to
+        # evaluate the metric there" (see `minimum_eval_percentage` filter
+        # above). Such a threshold is NOT a valid optimum candidate and must
+        # not contribute synthetic zeros to either the smoother or the SE
+        # estimate used by `metrics_ci` -- otherwise the smoothed curves get
+        # pulled toward zero near low-data regions and the longest-arrow
+        # argmax shifts away from the value Predictive Validation reports for
+        # the same data. Drop rows where either likelihood is NaN before
+        # smoothing so this code path matches `compute_likelihood_metrics`
+        # (which never injects fake zeros).
+        smoothed_df = all_metrics_df_sorted.dropna(
+            subset=["pred_pos_likelihood", "pred_neg_likelihood"]
+        ).copy()
 
-        all_metrics_df_sorted["pred_pos_likelihood"] = savgol_filter(
-            pred_pos_clean,
-            window_length=3,
-            polyorder=2,
-        )
-        all_metrics_df_sorted["pred_neg_likelihood"] = savgol_filter(
-            pred_neg_clean,
-            window_length=3,
-            polyorder=2,
-        )
+        if len(smoothed_df) >= 3:
+            smoothed_df["pred_pos_likelihood"] = savgol_filter(
+                smoothed_df["pred_pos_likelihood"].to_numpy(dtype=float),
+                window_length=3,
+                polyorder=2,
+            )
+            smoothed_df["pred_neg_likelihood"] = savgol_filter(
+                smoothed_df["pred_neg_likelihood"].to_numpy(dtype=float),
+                window_length=3,
+                polyorder=2,
+            )
 
         # Compute R2 and RMSES / call the function to calculate the longest arrow
         # and extract the PPVs and FORs corresponding to recommended thresholds
-        if scale == "log":
+        oe, pe = _resolve_ops(scale, op_exp, op_pred)
+        if needs_log_axis(oe) and needs_log_axis(pe):
             df = df[(df.observed != 0) & (df.predicted != 0)]
-            r2 = round(r2_score(np.log10(df.observed), np.log10(df.predicted)), 1)
-            rmse = round(
-                math.sqrt(
-                    mean_squared_error(np.log10(df.observed), np.log10(df.predicted))
-                ),
-                1,
-            )
+        elif needs_log_axis(oe):
+            df = df[df.observed != 0]
+        elif needs_log_axis(pe):
+            df = df[df.predicted != 0]
+        t_obs = apply_operation(df.observed.values, oe)
+        t_pred = apply_operation(df.predicted.values, pe)
+        r2 = round(r2_score(t_obs, t_pred), 1)
+        rmse = round(math.sqrt(mean_squared_error(t_obs, t_pred)), 1)
 
-            logged_threshold = np.log10(all_metrics_df_sorted.threshold)
+        if smoothed_df.empty:
+            # No swept threshold had enough data to compute a likelihood;
+            # there is no meaningful recommended threshold.
+            max_dist, max_thresh, max_ppv, max_for = -100, -100, -100, -100
+        elif needs_log_axis(pe):
+            logged_threshold = np.log10(smoothed_df.threshold)
             ci_metrics = metrics_ci(
                 logged_threshold,
-                all_metrics_df_sorted["pred_pos_likelihood"],
-                all_metrics_df_sorted["pred_neg_likelihood"],
+                smoothed_df["pred_pos_likelihood"],
+                smoothed_df["pred_neg_likelihood"],
             )
             max_dist, max_thresh, max_ppv, max_for = longest_arrow(
                 np.array(logged_threshold),
-                np.array(all_metrics_df_sorted["pred_pos_likelihood"]),
-                np.array(all_metrics_df_sorted["pred_neg_likelihood"]),
+                np.array(smoothed_df["pred_pos_likelihood"]),
+                np.array(smoothed_df["pred_neg_likelihood"]),
                 ci_metrics,
             )
 
@@ -1195,25 +1374,15 @@ def calculate_heatmap_metrics(
             max_thresh = 10**max_thresh
 
         else:
-            r2 = round(r2_score(df.observed, df.predicted), 1)
-            rmse = round(
-                math.sqrt(
-                    mean_squared_error(
-                        df.observed,
-                        df.predicted,
-                    )
-                ),
-                1,
-            )
             ci_metrics = metrics_ci(
-                all_metrics_df_sorted.threshold,
-                all_metrics_df_sorted["pred_pos_likelihood"],
-                all_metrics_df_sorted["pred_neg_likelihood"],
+                smoothed_df.threshold,
+                smoothed_df["pred_pos_likelihood"],
+                smoothed_df["pred_neg_likelihood"],
             )
             max_dist, max_thresh, max_ppv, max_for = longest_arrow(
-                np.array(all_metrics_df_sorted.threshold),
-                np.array(all_metrics_df_sorted["pred_pos_likelihood"]),
-                np.array(all_metrics_df_sorted["pred_neg_likelihood"]),
+                np.array(smoothed_df.threshold),
+                np.array(smoothed_df["pred_pos_likelihood"]),
+                np.array(smoothed_df["pred_neg_likelihood"]),
                 ci_metrics,
             )
 
@@ -1234,6 +1403,8 @@ def calculate_heatmap_metrics(
             model_version_col="ModelVersion",
             discount_factor=discount_factor,
             scale=scale,
+            op_exp=op_exp,
+            op_pred=op_pred,
         )
 
         if len(w_scores) <= 1:
@@ -1321,6 +1492,9 @@ def generate_heatmap_table(
     sample_reg_date: str,
     scale: str,
     exp_error: float,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+    threshold_transformed: bool = False,
 ) -> pd.DataFrame:
 
     """
@@ -1422,6 +1596,9 @@ def generate_heatmap_table(
         selected_threshold,
         scale,
         exp_error,
+        op_exp=op_exp,
+        op_pred=op_pred,
+        threshold_transformed=threshold_transformed,
     )
     metrics_all = pd.concat([metrics_all, metrics_overall])
 
@@ -1441,6 +1618,9 @@ def generate_heatmap_table(
             selected_threshold,
             scale,
             exp_error,
+            op_exp=op_exp,
+            op_pred=op_pred,
+            threshold_transformed=threshold_transformed,
         )
         metrics_all = pd.concat([metrics_all, metrics_series], axis=0)
 

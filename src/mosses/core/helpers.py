@@ -191,22 +191,55 @@ def highlight_cells(
 ) -> pd.DataFrame:
 
     """
-    Highlight cells with different colors in the dataframe based on model quality and stability
+    Highlight cells with different colors in the dataframe based on model quality and stability.
 
-    Parameters
-    ----------
-    df : dataframe
-        The final dataframe with all the calculated metrics to be displayed as a part of the heatmap
+    Uses a color-blind-friendly palette (Paul Tol muted scheme) consistent with
+    highlight_pct_cells so that both heatmap modes share the same visual language:
+      Good / Stable   → teal   (#44AA99)  — matches high end of pct_set scale
+      Medium / Neutral → sand  (#EEDD88)  — matches mid range of pct_set scale
+      Bad / Unstable  → vermillion (#CC3311) — matches low end of pct_set scale
+      NA / FD         → light grey (#BBBBBB)
     """
     color_mapping = {
-        'Good': 'background-color: green',
-        'Medium': 'background-color: orange',
-        'Bad': 'background-color: red',
-        'NA in area of SET': 'background-color: grey',
+        'Good':             'background-color:#44AA99; color:#000',
+        'Medium':           'background-color:#EEDD88; color:#000',
+        'Bad':              'background-color:#CC3311; color:#fff',
+        'FD':               'background-color:#BBBBBB; color:#000',
+        'NA in area of SET':'background-color:#BBBBBB; color:#000',
 
-        'Stable': 'background-color: green',
-        'Neutral': 'background-color: orange',
-        'Unstable': 'background-color: red',
-        'NA': 'background-color: grey'
+        'Stable':           'background-color:#44AA99; color:#000',
+        'Neutral':          'background-color:#EEDD88; color:#000',
+        'Unstable':         'background-color:#CC3311; color:#fff',
+        'NA':               'background-color:#BBBBBB; color:#000',
     }
     return color_mapping.get(df, '')
+
+
+def highlight_pct_cells(val) -> str:
+    """Color-blind-friendly background for a 0-100 percentage value.
+
+    Uses a 5-step sequential scale (Paul Tol's muted scheme) that is
+    readable on both light and dark text and distinguishable under the
+    three most common forms of color-vision deficiency.
+
+    The returned CSS always includes ``color`` so that text stays legible
+    against the background.
+    """
+    if val == "" or val is None:
+        return ""
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return ""
+    if pd.isna(v):
+        return ""
+    # Stepped thresholds — low is concerning (warm), high is good (cool)
+    if v < 20:
+        return "background-color:#CC3311; color:#fff"     # vermillion
+    if v < 40:
+        return "background-color:#EE7733; color:#000"     # orange
+    if v < 60:
+        return "background-color:#EEDD88; color:#000"     # sand/yellow
+    if v < 80:
+        return "background-color:#88CCEE; color:#000"     # cyan
+    return "background-color:#44AA99; color:#000"         # teal

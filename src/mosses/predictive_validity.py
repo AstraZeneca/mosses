@@ -1,6 +1,16 @@
+import math
 import warnings
 
 import mosses.core.metrics as metrics_calculator
+from mosses.core.metrics import (
+    apply_operation,
+    invert_operation_scalar,
+    _resolve_ops,
+    needs_log_axis,
+    performance_class_set,
+    performance_class_opt,
+    performance_class_compare,
+)
 import pandas as pd
 from colorama import Fore
 from mosses.core.evaluator import EvaluatedData
@@ -26,6 +36,10 @@ def calculate_and_plot(
     plot_title: str,
     plot_scale: str,
     series: str | None = None,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+    threshold_label: str = "prediction threshold",
+    threshold_transformed: bool = False,
 ):
     if (evaluated_data.test_count > 0 and series is None) or (
         len(evaluated_data.all_df) != 0 and series is not None
@@ -49,11 +63,17 @@ def calculate_and_plot(
             df=all_df,
             sample_reg_date_col=sample_registration_date,
         )
+        # For assay evaluation the plot_title is "X vs Y"; use only the
+        # experimental (Y) part so the chart header is not cluttered.
+        if threshold_transformed and " vs " in plot_title:
+            _exp_plot_title = plot_title.split(" vs ", 1)[1]
+        else:
+            _exp_plot_title = plot_title
         plotter.draw_exp_values_dist(
             agg_df=exp_values_dist,
             df=all_df,
             desired_threshold=current_threshold,
-            plot_title=plot_title,
+            plot_title=_exp_plot_title,
         )
 
         print_note(f"\n --- \n ### Model evaluation {series_title_postfix}")
@@ -72,6 +92,8 @@ def calculate_and_plot(
             scatter_metrics = metrics_calculator.compute_scatter_metrics(
                 df=evaluated_data.test_df,
                 scale=plot_scale,
+                op_exp=op_exp,
+                op_pred=op_pred,
             )
             if evaluated_data.test_count >= 10:
                 print_metrics_table(
@@ -97,13 +119,17 @@ def calculate_and_plot(
             )
 
     # ============== 2.2 training metrics ===================
-    if evaluated_data.test_count >= 10:
+    # Model performance over time is not meaningful for assay evaluation
+    # (two different assay columns are being compared, not a trained model).
+    if evaluated_data.test_count >= 10 and not threshold_transformed:
         print_note(f"\n#### Model performance over time {series_title_postfix}")
         print_note(f"\n##### RMSE {series_title_postfix}")
         model_stability_data = metrics_calculator.aggregate_model_stability_data(
             df=evaluated_data.test_df,
             scale=plot_scale,
             model_version_col=model_version,
+            op_exp=op_exp,
+            op_pred=op_pred,
         )
         if len(model_stability_data) > 1:
             plotter.plot_model_stability(
@@ -130,6 +156,8 @@ def calculate_and_plot(
             model_version_col=model_version,
             discount_factor=discount_factor,
             scale=plot_scale,
+            op_exp=op_exp,
+            op_pred=op_pred,
         )
         plotter.plot_time_weighted_scores(
             t_labels=t_labels,
@@ -140,49 +168,186 @@ def calculate_and_plot(
 
     # ============ 3. threshold metrics and model usage advice ===============
     if evaluated_data.test_count >= 10:
-        _, _, thresholds_selection = metrics_calculator.thresh_selection(
-            preds=evaluated_data.test_df["predicted"],
-            desired_threshold=current_threshold,
-            scale=plot_scale,
-        )
-        threshold_metrics = metrics_calculator.compute_threshold_metrics(
-            df=evaluated_data.test_df,
-            thresholds=thresholds_selection,
-            desired_threshold=current_threshold,
-            pos_class=pos_class,
-        )
+        if threshold_transformed:
+            # Assay evaluation: work entirely in transformed space.
+            # Transform predictions and observations so that the threshold
+            # sweep, PPV/FOR comparisons, and axis values all live in the
+            # configured transformed space.
+            _df_t = evaluated_data.test_df.copy()
+            _df_t["predicted"] = apply_operation(_df_t["predicted"].values, op_pred)
+            _df_t["observed"] = apply_operation(_df_t["observed"].values, op_exp)
+            _, _, thresholds_selection = metrics_calculator.thresh_selection(
+                preds=_df_t["predicted"],
+                desired_threshold=current_threshold,
+                scale="linear",
+                op_pred=None,
+            )
+            # For assay eval the experimental threshold (current_threshold)
+            # lives in observed-space and may not be meaningful as a
+            # prediction-cutoff. Remove it from the sweep if it falls far
+            # outside the prediction range to avoid distorting the x-axis.
+            _pred_min = _df_t["predicted"].min()
+            _pred_max = _df_t["predicted"].max()
+            _pred_margin = (_pred_max - _pred_min) * 0.1
+            if current_threshold < (_pred_min - _pred_margin) or current_threshold > (_pred_max + _pred_margin):
+                thresholds_selection = thresholds_selection[thresholds_selection != current_threshold]
+            threshold_metrics = metrics_calculator.compute_threshold_metrics(
+                df=_df_t,
+                thresholds=thresholds_selection,
+                desired_threshold=current_threshold,
+                pos_class=pos_class,
+            )
+        else:
+            _, _, thresholds_selection = metrics_calculator.thresh_selection(
+                preds=evaluated_data.test_df["predicted"],
+                desired_threshold=current_threshold,
+                scale=plot_scale,
+                op_pred=op_pred,
+            )
+            threshold_metrics = metrics_calculator.compute_threshold_metrics(
+                df=evaluated_data.test_df,
+                thresholds=thresholds_selection,
+                desired_threshold=current_threshold,
+                pos_class=pos_class,
+            )
         print_note(f"\n --- \n ### Model usage advice {series_title_postfix}")
         print_note(
-            f"\n#### What prediction threshold gives best enrichment {series_title_postfix}"
+            f"\n#### What {threshold_label} gives best enrichment {series_title_postfix}"
         )
         desired_project_threshold = threshold_metrics[
             threshold_metrics["threshold"] == current_threshold
         ]
+        # For assay eval, the experimental threshold may not exist in the
+        # prediction sweep (different spaces). Use a synthetic row with N/A
+        # so downstream code doesn't crash.
+        if desired_project_threshold.empty:
+            desired_project_threshold = pd.DataFrame(
+                [{
+                    "threshold": current_threshold,
+                    "pred_pos_likelihood": math.nan,
+                    "pred_neg_likelihood": math.nan,
+                    "compounds_tested": math.nan,
+                }]
+            )
         likelihood_metrics = metrics_calculator.compute_likelihood_metrics(
             threshold=threshold_metrics["threshold"],
             pred_pos_likelihood=threshold_metrics["pred_pos_likelihood"],
             pred_neg_likelihood=threshold_metrics["pred_neg_likelihood"],
             desired_threshold_df=desired_project_threshold,
-            scale=plot_scale,
+            scale="linear" if threshold_transformed else plot_scale,
             obs=threshold_metrics["compounds_tested"],
+            op_pred=None if threshold_transformed else op_pred,
         )
+        _, _pe = _resolve_ops(
+            "linear" if threshold_transformed else plot_scale,
+            None,
+            None if threshold_transformed else op_pred,
+        )
+
+        # ---------------------------------------------------------------
+        # Policy clipping (Option B): align the Predictive Validation
+        # "Recommended Threshold" with the Heatmap's "Opt Pred Threshold"
+        # so both pages tell the same story for the same model + series.
+        #
+        # The heatmap applies `performance_class_compare` after computing
+        # the raw longest-arrow recommendation: when the SET-side model
+        # quality is strictly better than the OPT-side quality, the OPT
+        # threshold + PPV/FOR are snapped back to the SET values. We
+        # reproduce that here by building a one-row DataFrame in the same
+        # shape `calculate_heatmap_metrics` builds and reusing the same
+        # policy functions verbatim -- no logic duplication.
+        #
+        # Backlog (Jenny): instead of snapping back to SET, search for a
+        # nearby threshold that improves predictive balance vs SET while
+        # still keeping PPV / model-quality above the "Bad" cutoff. Not
+        # implemented now.
+        # ---------------------------------------------------------------
+        raw_max_dist, raw_max_thresh, raw_max_ppv, raw_max_for = (
+            likelihood_metrics.arrow
+        )
+
+        def _to_num(v):
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return None
+            return None if math.isnan(f) else f
+
+        ppv_set_num = _to_num(likelihood_metrics.desired_pred_pos)
+        for_set_num = _to_num(likelihood_metrics.desired_pred_neg)
+        raw_ppv_num = None if raw_max_ppv == -100 else _to_num(raw_max_ppv)
+        raw_for_num = None if raw_max_for == -100 else _to_num(raw_max_for)
+        raw_dist_num = None if raw_max_dist == -100 else _to_num(raw_max_dist)
+        raw_thresh_user = (
+            None
+            if raw_max_thresh == -100
+            else (
+                invert_operation_scalar(raw_max_thresh, _pe)
+                if needs_log_axis(_pe)
+                else raw_max_thresh
+            )
+        )
+
+        # Defaults (used when the snap cannot be evaluated -> show raw)
+        rec_threshold_display = (
+            None
+            if raw_thresh_user is None
+            else round(raw_thresh_user, 1)
+        )
+        rec_ppv_display = "N/A" if raw_ppv_num is None else int(raw_ppv_num)
+        rec_for_display = "N/A" if raw_for_num is None else int(raw_for_num)
+
+        snap_inputs = (
+            ppv_set_num,
+            for_set_num,
+            raw_ppv_num,
+            raw_for_num,
+            raw_dist_num,
+            raw_thresh_user,
+        )
+        if all(v is not None for v in snap_inputs):
+            policy_row = pd.DataFrame(
+                [
+                    {
+                        # `performance_class_set` / `_opt` only read
+                        # PPV/FOR/ArrowLength + compounds count, so this is
+                        # the minimum row needed to drive the same decision
+                        # the heatmap makes.
+                        "Compounds with measured values": (
+                            evaluated_data.test_count
+                        ),
+                        "PPV %": ppv_set_num,
+                        "FOR %": for_set_num,
+                        "ArrowLength": ppv_set_num - for_set_num,
+                        "PPVopt %": raw_ppv_num,
+                        "FORopt %": raw_for_num,
+                        "Recommended_LongestArrow": raw_dist_num,
+                        "Opt Pred Threshold": raw_thresh_user,
+                        "SET": current_threshold,
+                    }
+                ]
+            )
+            policy_row["Model Quality"] = policy_row.apply(
+                performance_class_set, axis=1
+            )
+            policy_row["Model Quality opt"] = policy_row.apply(
+                performance_class_opt, axis=1
+            )
+            policy_row = policy_row.apply(performance_class_compare, axis=1)
+
+            rec_threshold_display = round(
+                float(policy_row["Opt Pred Threshold"].iloc[0]), 1
+            )
+            rec_ppv_display = int(round(float(policy_row["PPVopt %"].iloc[0])))
+            rec_for_display = int(round(float(policy_row["FORopt %"].iloc[0])))
+
         print_ppv_for_table(
             pre_threshold=current_threshold,
             ppv=likelihood_metrics.desired_pred_pos,
             for_val=likelihood_metrics.desired_pred_neg,
-            rec_threshold=round(10 ** likelihood_metrics.arrow[1], 1)
-            if plot_scale == "log"
-            else round(likelihood_metrics.arrow[1], 1),
-            rec_ppv=(
-                "N/A"
-                if likelihood_metrics.arrow[2] == -1
-                else int(likelihood_metrics.arrow[2])
-            ),
-            rec_for=(
-                "N/A"
-                if likelihood_metrics.arrow[3] == -1
-                else int(likelihood_metrics.arrow[3])
-            ),
+            rec_threshold=rec_threshold_display,
+            rec_ppv=rec_ppv_display,
+            rec_for=rec_for_display,
         )
         plotter.plot_likelihood(
             threshold=threshold_metrics["threshold"],
@@ -199,14 +364,15 @@ def calculate_and_plot(
             threshold=threshold_metrics["threshold"],
             metric1=threshold_metrics["ppv"],
             metric2=threshold_metrics["compounds_discarded"],
-            scale=plot_scale,
+            scale="linear" if threshold_transformed else plot_scale,
+            op_pred=None if threshold_transformed else op_pred,
         )
         _, max_thresh, max_ppv, max_for = line_plot_metrics.arrow
         max_ppv = "N/A" if max_ppv == -1 else int(max_ppv)
         max_for = "N/A" if max_for == -1 else int(max_for)
         print_unbiased_ppv_for_table(
-            threshold=int(10**max_thresh)
-            if plot_scale == "log"
+            threshold=int(invert_operation_scalar(max_thresh, _pe))
+            if needs_log_axis(_pe)
             else round(max_thresh, 1),
             ppv=max_ppv,
             for_val=max_for,
@@ -253,6 +419,10 @@ def _process_and_plot(
     plot_title: str,
     plot_scale: str,
     series: str | None = None,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+    threshold_label: str = "prediction threshold",
+    threshold_transformed: bool = False,
 ):
     if not evaluated_data:
         series_msg = f" for {series} series" if series else ""
@@ -273,6 +443,10 @@ def _process_and_plot(
         plot_title=plot_title,
         plot_scale=plot_scale,
         series=series,
+        op_exp=op_exp,
+        op_pred=op_pred,
+        threshold_label=threshold_label,
+        threshold_transformed=threshold_transformed,
     )
 
 
@@ -288,6 +462,10 @@ def evaluate_pv(
     plot_scale,
     plot_title,
     series_column=None,
+    op_exp=None,
+    op_pred=None,
+    threshold_label: str = "prediction threshold",
+    threshold_transformed: bool = False,
 ):
     """
     Evaluates the model performance for a given data set and desired criterion.
@@ -297,7 +475,9 @@ def evaluate_pv(
         observed_column (str): Name of the column with observed values.
         predicted_column (str): Name of the column with predicted values.
         training_set_column (str): Column indicating whether a sample
-            was in the training or test set.
+            was in the training or test set. If the column does not exist
+            in the DataFrame (e.g. the sentinel value "All are prospective"),
+            all compounds are treated as the test set.
         pos_class (str): String (either ">" or "<=") indicating whether the
             predictions should be greater or lower than the threshold.
         current_threshold (float): Numerical cut-off used by the tool to
@@ -321,6 +501,8 @@ def evaluate_pv(
         training_set_col=training_set_column,
         scale=plot_scale,
         series_column=series_column,
+        op_exp=op_exp,
+        threshold_transformed=threshold_transformed,
     )
     pv_evaluator.prepare_data(
         observed_col=observed_column,
@@ -329,7 +511,7 @@ def evaluate_pv(
         model_version_col=model_version,
         sample_reg_date_col=sample_registration_date,
     )
-    plotter = Plotter(scale=plot_scale)
+    plotter = Plotter(scale=plot_scale, op_exp=op_exp, op_pred=op_pred, threshold_transformed=threshold_transformed)
 
     if not series_column:
         evaluated_data = pv_evaluator.evaluate()
@@ -342,6 +524,10 @@ def evaluate_pv(
             pos_class=pos_class,
             plot_title=plot_title,
             plot_scale=plot_scale,
+            op_exp=op_exp,
+            op_pred=op_pred,
+            threshold_label=threshold_label,
+            threshold_transformed=threshold_transformed,
         )
         return
 
@@ -367,4 +553,8 @@ def evaluate_pv(
                 plot_title=plot_title,
                 plot_scale=plot_scale,
                 series=series,
+                op_exp=op_exp,
+                op_pred=op_pred,
+                threshold_label=threshold_label,
+                threshold_transformed=threshold_transformed,
             )

@@ -9,12 +9,13 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 from mosses.core.metrics import LikelihoodMetrics
 from mosses.core.metrics import LinePlotMetrics
+from mosses.core.metrics import apply_operation, needs_log_axis, _resolve_ops
 
 logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 
 
 class Plotter:
-    def __init__(self, scale: str = "log") -> None:
+    def __init__(self, scale: str = "log", op_exp: str | None = None, op_pred: str | None = None, threshold_transformed: bool = False) -> None:
         """
         Initialize the Plotter.
 
@@ -22,8 +23,16 @@ class Plotter:
         ----------
         scale : str, optional
             Scale to use for the plots ('log' or 'linear'), by default 'log'.
+        op_exp : str, optional
+            Operation on experimental column ("None", "Log", "Negative Log", "Negative").
+        op_pred : str, optional
+            Operation on predicted column.
+        threshold_transformed : bool, optional
+            If True, threshold is already in transformed space (assay evaluation).
         """
-        self.scale = scale
+        self.op_exp, self.op_pred = _resolve_ops(scale, op_exp, op_pred)
+        self.scale = "log" if (needs_log_axis(self.op_exp) or needs_log_axis(self.op_pred)) else "linear"
+        self.threshold_transformed = threshold_transformed
 
     @staticmethod
     def reset_y_ticks(
@@ -120,27 +129,27 @@ class Plotter:
         fig.canvas.header_visible = False
         ax.plot(
             agg_df["month_year"],
-            np.log10(agg_df["median_exp"]),
+            apply_operation(agg_df["median_exp"].values, self.op_exp),
             marker="o",
             color="dodgerblue",
         )
 
-        observed_log = np.log10(df["observed"])
+        observed_log = apply_operation(df["observed"].values, self.op_exp)
         y_min = observed_log.min() - 0.5
         y_max = observed_log.max() + 0.5
-        ylims = np.arange(y_min, y_max, 0.5)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
         ax.set_ylim(y_min, y_max)
-        ax.yaxis.set_ticks(ylims)
 
         ax.set_xticklabels(agg_df["month_year"], rotation=90, fontsize=8)
 
-        y_ticks = ax.get_yticks()
-        new_y_ticks = [int(10**y) for y in y_ticks]
-        ax.set_yticks(y_ticks)
-        ax.set_yticklabels(new_y_ticks, rotation=45, fontsize=8)
+        # Convert log-space ticks back to original scale for display
+        # (skip for assay evaluation where axes show transformed space)
+        if not self.threshold_transformed:
+            y_ticks = ax.get_yticks()
+            ax.set_yticklabels([int(10**y) for y in y_ticks], fontsize=8)
+        _thresh_y = desired_threshold if self.threshold_transformed else apply_operation(np.array([desired_threshold]), self.op_exp)[0]
         ax.axhline(
-            y=np.log10(desired_threshold),
+            y=_thresh_y,
             color="orangered",
             linestyle="dotted",
         )
@@ -193,25 +202,27 @@ class Plotter:
         """
         fig, ax = plt.subplots(figsize=(6, 6))
         fig.canvas.header_visible = False
-        inc = (df["observed"].max() - df["observed"].min()) / 5
-        y_min = df["observed"].min() - inc
-        y_max = df["observed"].max() + inc
-        ylims = np.arange(y_min, y_max, inc)
+
+        # For assay evaluation, plot in the configured transformed space.
+        if self.threshold_transformed:
+            median_vals = apply_operation(agg_df["median_exp"].values, self.op_exp)
+            obs_vals = apply_operation(df["observed"].values, self.op_exp)
+        else:
+            median_vals = agg_df["median_exp"].values
+            obs_vals = df["observed"].values
+
+        inc = (obs_vals.max() - obs_vals.min()) / 5
+        y_min = obs_vals.min() - inc
+        y_max = obs_vals.max() + inc
         ax.plot(
-            agg_df["month_year"], agg_df["median_exp"], marker="o", color="dodgerblue"
+            agg_df["month_year"], median_vals, marker="o", color="dodgerblue"
         )
         ax.set_xlabel("Sample Registration Date", fontweight="bold")
         ax.set_ylabel("Experimental values - Median", fontweight="bold")
 
         ax.set_xticklabels(agg_df["month_year"], rotation=90)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
         ax.set_ylim(y_min, y_max)
-        ax.yaxis.set_ticks(ylims)
-
-        y_ticks = ax.get_yticks()
-        new_y_ticks = [round(y, 1) for y in y_ticks]
-        ax.set_yticks(y_ticks)
-        ax.set_yticklabels(new_y_ticks, rotation=45)
         ax.axhline(y=desired_threshold, color="orangered", linestyle="dotted")
 
         ax.set_title(f"{plot_title} - Experimental values over time")
@@ -267,7 +278,7 @@ class Plotter:
             )
             return
 
-        if self.scale == "log":
+        if needs_log_axis(self.op_exp):
             self._plot_log_exp_values_dist(
                 agg_df,
                 df,
@@ -304,9 +315,16 @@ class Plotter:
             Metrics (e.g., R2 and RMSE) to be printed.
             If None, a warning is shown.
         """
-        df = df[(df["observed"] != 0) & (df["predicted"] != 0)]
-        df["log_predicted"] = np.log10(df["predicted"])
-        df["log_observed"] = np.log10(df["observed"])
+        # Only exclude zeros for axes that use a log-based transform (log(0)
+        # is undefined). For other transforms (None, Negative) zeros are valid.
+        _mask = pd.Series(True, index=df.index)
+        if needs_log_axis(self.op_exp):
+            _mask &= df["observed"] != 0
+        if needs_log_axis(self.op_pred):
+            _mask &= df["predicted"] != 0
+        df = df[_mask]
+        df["log_predicted"] = apply_operation(df["predicted"].values, self.op_pred)
+        df["log_observed"] = apply_operation(df["observed"].values, self.op_exp)
 
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
@@ -320,40 +338,44 @@ class Plotter:
             fit_reg=True,
         )
 
+        _thresh_exp = desired_threshold if self.threshold_transformed else apply_operation(np.array([desired_threshold]), self.op_exp)[0]
+        _thresh_pred = desired_threshold if self.threshold_transformed else apply_operation(np.array([desired_threshold]), self.op_pred)[0]
         ax.axhline(
-            y=np.log10(desired_threshold),
+            y=_thresh_exp,
             color="orangered",
             linestyle="dotted",
         )
         ax.axvline(
-            x=np.log10(desired_threshold),
+            x=_thresh_pred,
             color="orangered",
             linestyle="dotted",
         )
-        ax.set_xlim(0, max(np.log10(df["predicted"])))
-        ax.set_ylim(0, max(np.log10(df["observed"])))
 
-        ax = Plotter.reset_x_ticks(df["predicted"], ax)
-
-        ylims = np.arange(
-            min(np.log10(df["observed"])) - 0.5,
-            max(np.log10(df["observed"])) + 0.5,
-            0.5,
-        )
-        ax.set_ylim(
-            min(np.log10(df["observed"])) - 0.5,
-            max(np.log10(df["observed"])) + 0.5,
-        )
-        ax.yaxis.set_ticks(ylims)
-
-        y_ticks = ax.get_yticks()
-        if (y_ticks < 0).any():
-            new_y_ticks = [round(10**y, 2) for y in y_ticks]
+        if self.threshold_transformed:
+            # Assay evaluation: transformed values may be negative (e.g.
+            # Negative Log of values > 1), so use data-driven axis bounds.
+            x_min = min(df["log_predicted"]) - 0.5
+            x_max = max(df["log_predicted"]) + 0.5
+            ax.set_xlim(x_min, x_max)
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
         else:
-            new_y_ticks = [int(10**y) for y in y_ticks]
+            ax.set_xlim(0, max(df["log_predicted"]))
+            ax.set_ylim(0, max(df["log_observed"]))
+            ax = Plotter.reset_x_ticks(df["predicted"], ax)
 
-        ax.set_yticks(y_ticks)
-        ax.set_yticklabels(new_y_ticks, rotation=45)
+        y_min = min(df["log_observed"]) - 0.5
+        y_max = max(df["log_observed"]) + 0.5
+        ax.set_ylim(y_min, y_max)
+        if needs_log_axis(self.op_exp):
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
+            if not self.threshold_transformed:
+                y_ticks = ax.get_yticks()
+                if (y_ticks < 0).any():
+                    ax.set_yticklabels([round(10**y, 2) for y in y_ticks])
+                else:
+                    ax.set_yticklabels([int(10**y) for y in y_ticks])
+        else:
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
 
         ax.set_xlabel("Predicted", fontweight="bold")
         ax.set_ylabel("Experimental", fontweight="bold")
@@ -387,6 +409,14 @@ class Plotter:
         """
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
+
+        # For assay evaluation, apply configured transforms so the plot is in
+        # the intended comparison space (e.g. "Negative" -> negated values).
+        if self.threshold_transformed:
+            df = df.copy()
+            df["predicted"] = apply_operation(df["predicted"].values, self.op_pred)
+            df["observed"] = apply_operation(df["observed"].values, self.op_exp)
+
         sns.regplot(
             data=df,
             x="predicted",
@@ -435,7 +465,15 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
 
-        if self.scale == "log":
+        # The threshold axis (x) lives on the predicted side, so its log/linear
+        # treatment must be driven solely by ``op_pred`` -- not by ``self.scale``
+        # which collapses both per-axis operations and would incorrectly log the
+        # x-axis when only the experimental (y) side needs a log transform
+        # (e.g. assay-evaluation models with op_exp=Log, op_pred=None).
+        # For assay evaluation (threshold_transformed), thresholds are already
+        # in transformed space — always use linear branch.
+        _log_x = needs_log_axis(self.op_pred) and not self.threshold_transformed
+        if _log_x:
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_metric1,
@@ -596,7 +634,12 @@ class Plotter:
             f"Selected Experimental Threshold: {pos_class} " f"{desired_threshold}"
         )
 
-        if self.scale == "log":
+        # See ``line_plot_threshold_metrics``: the x-axis is the predicted
+        # threshold, so its scale must be derived from ``op_pred`` only.
+        # For assay evaluation (threshold_transformed), thresholds are already
+        # in transformed space — always use linear branch.
+        _log_x = needs_log_axis(self.op_pred) and not self.threshold_transformed
+        if _log_x:
             ax.plot(
                 np.log10(threshold),
                 metrics.filtered_pred_pos,
@@ -637,14 +680,15 @@ class Plotter:
                     metrics.desired_pred_pos != "N/A"
                     and metrics.desired_pred_neg != "N/A"
                 ):
+                    _t = desired_threshold if self.threshold_transformed else apply_operation(np.array([desired_threshold]), self.op_pred)[0]
                     plt.annotate(
                         text="",
                         xy=(
-                            np.log10(desired_threshold),
+                            _t,
                             metrics.desired_pred_neg,
                         ),
                         xytext=(
-                            np.log10(desired_threshold),
+                            _t,
                             metrics.desired_pred_pos,
                         ),
                         arrowprops=dict(arrowstyle="<->", color="plum"),
