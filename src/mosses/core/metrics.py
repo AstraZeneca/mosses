@@ -1051,7 +1051,7 @@ def compute_scatter_metrics(
     rmse_val = math.sqrt(mean_squared_error(obs, pred))
 
     return ScatterMetrics(
-        r2=round(r2_val_mod, 1),
+        r2=round(r2_val_mod, 2),
         rmse=round(rmse_val, 2),
     )
 
@@ -1349,7 +1349,7 @@ def calculate_heatmap_metrics(
             df = df[df.predicted != 0]
         t_obs = apply_operation(df.observed.values, oe)
         t_pred = apply_operation(df.predicted.values, pe)
-        r2 = round(r2_score(t_obs, t_pred), 1)
+        r2 = round(r2_score(t_obs, t_pred), 2)
         rmse = round(math.sqrt(mean_squared_error(t_obs, t_pred)), 1)
 
         if smoothed_df.empty:
