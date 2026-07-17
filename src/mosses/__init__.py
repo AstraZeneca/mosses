@@ -24,12 +24,13 @@ Example
 >>> result = mpo.compute_scores(df, config)
 """
 
-from mosses import heatmap, mpo, predictive_validity
+from mosses import data_api, heatmap, mpo, predictive_validity
 
 __all__ = [
     "predictive_validity",
     "heatmap",
     "mpo",
+    "data_api",
 ]
 
-__version__ = "0.3.3"
+__version__ = "0.5.0"
