@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
@@ -180,9 +182,9 @@ def project_heatmap_stats(
         'Time Dependant Stability Class'
     ] = 'NA'
 
-    # Assign 0 when Pearson R2 values are negative
+    # Assign 0, when Pearson R2 values are negative
     result_df.loc[result_df["Pearson R2"] < 0.0, "Pearson R2"] = 0
-
+    
     # Don't recommend thresholds, if the suggested threshold make the model quality look bad
     result_df = result_df.apply(
         metrics_calculator.performance_class_compare,
@@ -371,6 +373,10 @@ def global_heatmap_table(
     _MODE_COL = {
         "quality": "Model Quality at optimized threshold",
         "pct_set": "Compounds Obeying SET %",
+        "time_dep": "Time Dependant Stability Class",
+        "pearson": "Pearson R²",
+        "spearman": "Spearman R²",
+        "rmse": "RMSE",
     }
     source_col = _MODE_COL.get(cell_mode, _MODE_COL["quality"])
 
@@ -462,6 +468,24 @@ def global_heatmap_table(
             .set_table_styles([
                 dict(selector="thead th", props=[("text-align", "left")]),
             ])
+            .set_properties(**{"text-align": "left"})
+        )
+    elif cell_mode in ("pearson", "spearman", "rmse"):
+        # Use a lambda so empty-string placeholder cells are not formatted as floats
+        _fmt_num = lambda v: (
+            f"{v:.2f}"
+            if isinstance(v, (int, float)) and not (isinstance(v, float) and pd.isna(v))
+            else ""
+        )
+        fmt = {c: _fmt_num for c in model_cols_present}
+        styled = (
+            result.style.format(fmt, na_rep="")
+            .hide(axis=0)
+            .set_table_styles(
+                [
+                    dict(selector="thead th", props=[("text-align", "left")]),
+                ]
+            )
             .set_properties(**{"text-align": "left"})
         )
     else:
