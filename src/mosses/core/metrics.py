@@ -1,17 +1,18 @@
 import math
 from dataclasses import dataclass
-from datetime import date
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 from scipy.spatial.distance import cdist
-from scipy.stats import spearmanr
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import precision_score
-from sklearn.metrics import r2_score
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import (
+    confusion_matrix,
+    mean_squared_error,
+    precision_score,
+    r2_score,
+)
 from sklearn.preprocessing import StandardScaler
 
 
@@ -1046,8 +1047,14 @@ def compute_scatter_metrics(
     obs = apply_operation(df["observed"].values, oe)
     pred = apply_operation(df["predicted"].values, pe)
 
-    r2_val = r2_score(obs, pred)
-    r2_val_mod = 0.0 if r2_val < 0.0 else r2_val
+    # Compute Pearson correlation and convert to R^2. Fallback to r2_score
+    try:
+        r, _ = pearsonr(obs, pred)
+        r2_val = (r * r) if r is not None else r2_score(obs, pred)
+    except Exception:
+        r2_val = r2_score(obs, pred)
+
+    r2_val_mod = 0.00 if r2_val < 0.0 else float(r2_val)
     rmse_val = math.sqrt(mean_squared_error(obs, pred))
 
     return ScatterMetrics(
@@ -1350,7 +1357,12 @@ def calculate_heatmap_metrics(
         t_obs = apply_operation(df.observed.values, oe)
         t_pred = apply_operation(df.predicted.values, pe)
         r2 = round(r2_score(t_obs, t_pred), 2)
-        rmse = round(math.sqrt(mean_squared_error(t_obs, t_pred)), 1)
+        # Pearson R (Spearman rho) — keep Pearson R2 and also report Spearman
+        try:
+            spearman_val = round(float(spearmanr(t_obs, t_pred).correlation), 2)
+        except Exception:
+            spearman_val = np.nan
+        rmse = round(math.sqrt(mean_squared_error(t_obs, t_pred)), 2)
 
         if smoothed_df.empty:
             # No swept threshold had enough data to compute a likelihood;
@@ -1415,6 +1427,7 @@ def calculate_heatmap_metrics(
         recommended_thresh_other_metrics_df = pd.DataFrame(
             [
                 [
+                    spearman_val,
                     r2,
                     rmse,
                     max_dist,
@@ -1456,7 +1469,7 @@ def calculate_heatmap_metrics(
             selected_threshold_df.columns.size
         )
         recommended_thresh_other_metrics_df = pd.DataFrame(
-            np.full(shape=(1, 7), fill_value=np.nan)
+            np.full(shape=(1, 8), fill_value=np.nan)
         )
         selected_rec_threshold_df = pd.concat(
             [

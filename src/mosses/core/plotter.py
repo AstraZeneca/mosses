@@ -7,9 +7,14 @@ import seaborn as sns
 from colorama import Fore
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
-from mosses.core.metrics import LikelihoodMetrics
-from mosses.core.metrics import LinePlotMetrics
-from mosses.core.metrics import apply_operation, needs_log_axis, _resolve_ops
+
+from mosses.core.metrics import (
+    LikelihoodMetrics,
+    LinePlotMetrics,
+    _resolve_ops,
+    apply_operation,
+    needs_log_axis,
+)
 
 logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 
@@ -586,8 +591,8 @@ class Plotter:
         ax.legend(
             handles=my_handle,
             labels=[
-                "Likelihood to extract good compounds at each " "prediction threshold",
-                "Likelihood to discard good compounds at each " "prediction threshold",
+                "PPV - Likelihood to extract good compounds at each " "prediction threshold",
+                "FOR - Likelihood to discard good compounds at each " "prediction threshold",
                 "% of compounds tested (cumulative)",
             ],
             bbox_to_anchor=(0.5, -0.23),
@@ -785,9 +790,9 @@ class Plotter:
             handles=myHandle,
             labels=[
                 threshold_label,
-                "Likelihood to extract good compounds according "
+                "PPV - Likelihood to extract good compounds according "
                 "to pre-selected experimental threshold",
-                "Likelihood to discard good compounds according "
+                "FOR - Likelihood to discard good compounds according "
                 "to pre-selected experimental threshold",
                 "% of compounds tested (cumulative)",
             ],

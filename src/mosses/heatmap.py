@@ -1,8 +1,8 @@
-from __future__ import annotations
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from typing import Any
+
 import mosses.core.metrics as metrics_calculator
 from mosses.core.helpers import highlight_cells, highlight_pct_cells
 
@@ -118,22 +118,23 @@ def project_heatmap_stats(
         return empty.style
 
     result_df.columns = [
-        'Model',
-        'Series',
-        'Compounds with measured values',
-        'Exp_Error (log)',
-        'Aim',
-        'SET',
-        'Compounds Obeying SET %',
-        'PPV %',
-        'FOR %',
-        'R2',
-        'RMSE (log)',
-        'Recommended_LongestArrow',
-        'Opt Pred Threshold',
-        'PPVopt %',
-        'FORopt %',
-        'TimeDependant_Stability',
+        "Model",
+        "Series",
+        "Compounds with measured values",
+        "Exp_Error",
+        "Aim",
+        "SET",
+        "Compounds Obeying SET %",
+        "PPV %",
+        "FOR %",
+        "Spearman R2",
+        "Pearson R2",
+        "RMSE",
+        "Recommended_LongestArrow",
+        "Opt Pred Threshold",
+        "PPVopt %",
+        "FORopt %",
+        "TimeDependant_Stability",
     ]
     
     # Calculate arrow length at the selected experimental threshold
@@ -179,9 +180,9 @@ def project_heatmap_stats(
         'Time Dependant Stability Class'
     ] = 'NA'
 
-    # Assign 0, when R2 values are negative
-    result_df.loc[result_df['R2'] < 0.0, 'R2'] = 0
-    
+    # Assign 0 when Pearson R2 values are negative
+    result_df.loc[result_df["Pearson R2"] < 0.0, "Pearson R2"] = 0
+
     # Don't recommend thresholds, if the suggested threshold make the model quality look bad
     result_df = result_df.apply(
         metrics_calculator.performance_class_compare,
@@ -215,31 +216,32 @@ def project_heatmap_stats(
     result_df = result_df.loc[
         :,
         [
-            'Series',
-            'Category',
-            'Model',
-            'Units',
-            'Aim',
-            'SET',
-            'Opt Pred Threshold',
-            'PPVopt %',
-            'FORopt %',
-            'Predictive balance (PPV-FOR)',
-            'Model Quality opt',
-            'Time Dependant Stability Class',
-            'Exp_Error (log)',
-            'Compounds with measured values',
-            'Compounds Obeying SET %',
-            'RMSE (log)',
-            'R2',
-            'PPV %',
-            'FOR %',
-            'Model Quality',
-            'Recommended_LongestArrow',
-            'TimeDependant_Stability',
-            'ArrowLength',
-            'Sort_Order',
-        ]
+            "Series",
+            "Category",
+            "Model",
+            "Units",
+            "Aim",
+            "SET",
+            "Opt Pred Threshold",
+            "PPVopt %",
+            "FORopt %",
+            "Predictive balance (PPV-FOR)",
+            "Model Quality opt",
+            "Time Dependant Stability Class",
+            "Exp_Error",
+            "Compounds with measured values",
+            "Compounds Obeying SET %",
+            "RMSE",
+            "Pearson R2",
+            "Spearman R2",
+            "PPV %",
+            "FOR %",
+            "Model Quality",
+            "Recommended_LongestArrow",
+            "TimeDependant_Stability",
+            "ArrowLength",
+            "Sort_Order",
+        ],
     ]
     result_df = result_df.sort_values(
         by=['Series', 'Sort_Order'],
@@ -271,15 +273,18 @@ def project_heatmap_stats(
     )
 
     display_name_map = {
-        'SET': 'Selected experimental threshold (SET)',
-        'Exp_Error (log)': 'Experimental Error (log)',
-        'PPV %': 'Likelihood to extract good compounds (PPV %) at threshold = SET',
-        'FOR %': 'Likelihood to lose good compounds (FOR %) at threshold = SET',
-        'Model Quality': 'Model Quality at threshold = SET',
-        'Opt Pred Threshold': 'Optimized Prediction Threshold for filtering',
-        'PPVopt %': 'Likelihood to extract good compounds (PPV %) at optimized threshold',
-        'FORopt %': 'Likelihood to lose good compounds (FOR %) at optimized threshold',
-        'Model Quality opt': 'Model Quality at optimized threshold',
+        "SET": "Selected experimental threshold (SET)",
+        "Exp_Error": "Experimental Error",
+        "PPV %": "Likelihood to extract good compounds (PPV %) at threshold = SET",
+        "FOR %": "Likelihood to lose good compounds (FOR %) at threshold = SET",
+        "Model Quality": "Model Quality at threshold = SET",
+        "Opt Pred Threshold": "Optimized Prediction Threshold for filtering",
+        "PPVopt %": "Likelihood to extract good compounds (PPV %) at optimized threshold",
+        "FORopt %": "Likelihood to lose good compounds (FOR %) at optimized threshold",
+        "Model Quality opt": "Model Quality at optimized threshold",
+        "RMSE": "RMSE",
+        "Pearson R2": "Pearson R²",
+        "Spearman R2": "Spearman R²",
     }
     result_df = result_df.rename(columns=display_name_map)
 
@@ -310,23 +315,24 @@ def project_heatmap_stats(
         'Time Dependant Stability Class',
     ]
 
-    result_df_regrouped = result_df_regrouped.style.applymap(
-        highlight_cells,
-        subset=highlight_subset
-    ).format(
-        precision=1,
-        na_rep=""
-    ).hide(axis=0).set_table_styles(
-        [
-            dict(
-                selector='thead th',
-                props=[
-                    ('text-align', 'left')
-                ]
-            ),
-        ]
-    ).set_properties(
-        **{'text-align': 'left'}
+    # Format numeric columns: two decimals for R metrics and RMSE, integers for PPV/FOR.
+    result_df_regrouped = (
+        result_df_regrouped.style.applymap(highlight_cells, subset=highlight_subset)
+        .format(
+            {
+                "Pearson R2": "{:.2f}",
+                "Spearman R2": "{:.2f}",
+                "RMSE": "{:.2f}",
+            },
+            na_rep="",
+        )
+        .hide(axis=0)
+        .set_table_styles(
+            [
+                dict(selector="thead th", props=[("text-align", "left")]),
+            ]
+        )
+        .set_properties(**{"text-align": "left"})
     )
 
     if return_models_with_missing_columns:
