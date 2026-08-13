@@ -99,6 +99,7 @@ def calculate_and_plot(
                 print_metrics_table(
                     r2=scatter_metrics.r2,
                     rmse=scatter_metrics.rmse,
+                    scale=plot_scale,
                 )
             else:
                 print(
@@ -305,6 +306,35 @@ def calculate_and_plot(
             raw_dist_num,
             raw_thresh_user,
         )
+        # Ensure `model_quality_set` and `model_quality_opt` are defined even
+        # when the full snap cannot be evaluated. Try a best-effort computation
+        # from available PPV/FOR values so the UI shows meaningful labels.
+        model_quality_set = "N/A"
+        model_quality_opt = "N/A"
+        try:
+            if (ppv_set_num is not None) and (for_set_num is not None):
+                arrow_len = ppv_set_num - for_set_num
+                df_set = pd.DataFrame([
+                    {
+                        "Compounds with measured values": evaluated_data.test_count,
+                        "PPV %": ppv_set_num,
+                        "ArrowLength": arrow_len,
+                    }
+                ])
+                model_quality_set = df_set.apply(performance_class_set, axis=1).iloc[0]
+            if (raw_ppv_num is not None) and (raw_for_num is not None):
+                df_opt = pd.DataFrame([
+                    {
+                        "Compounds with measured values": evaluated_data.test_count,
+                        "PPVopt %": raw_ppv_num,
+                        "Recommended_LongestArrow": raw_dist_num,
+                    }
+                ])
+                model_quality_opt = df_opt.apply(performance_class_opt, axis=1).iloc[0]
+        except Exception:
+            # keep defaults on error
+            model_quality_set = "N/A"
+            model_quality_opt = "N/A"
         if all(v is not None for v in snap_inputs):
             policy_row = pd.DataFrame(
                 [
@@ -348,6 +378,8 @@ def calculate_and_plot(
             rec_threshold=rec_threshold_display,
             rec_ppv=rec_ppv_display,
             rec_for=rec_for_display,
+            model_quality_set=model_quality_set,
+            model_quality_opt=model_quality_opt,
         )
         plotter.plot_likelihood(
             threshold=threshold_metrics["threshold"],

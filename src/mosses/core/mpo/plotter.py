@@ -380,7 +380,11 @@ def plot_mutual_info(
     plt.Figure
         The matplotlib figure object.
     """
-    fig, ax = plt.subplots(figsize=(16, 14))
+    # Dynamic sizing: scale width with number of features
+    n = len(mi_df)
+    width = max(6, min(24, int(n * 0.6 + 4)))
+    height = max(4, min(16, int(n * 0.35 + 4)))
+    fig, ax = plt.subplots(figsize=(width, height))
 
     labels = [str(f) for f in mi_df["Feature"]]
     mi_values = mi_df["Mutual Information"].values
@@ -417,32 +421,38 @@ def plot_mutual_info(
             transform=ax.get_yaxis_transform(),
             va="bottom",
             ha="right",
-            fontsize=35,
+            fontsize=10,
             color="red",
             fontstyle="italic",
         )
 
     # Annotate bars
+    # Annotate bars with scaled font size
+    if n > 0:
+        ann_fs = max(7, min(11, int(110 / (n + 4))))
+    else:
+        ann_fs = 9
     for bar, score in zip(bars, mi_values):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 0.005,
+            bar.get_height()
+            + 0.005 * max(1.0, max(mi_values) if len(mi_values) else 1.0),
             f"{score:.2f}",
             ha="center",
             va="bottom",
-            fontsize=30,
+            fontsize=ann_fs,
             fontweight="bold",
         )
 
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_ylabel("Mutual Information", fontsize=35, labelpad=12)
-    ax.set_title(title, fontsize=40, pad=12)
-    ax.tick_params(labelsize=35)
+    ax.set_ylabel("Mutual Information", fontsize=12, labelpad=12)
+    ax.set_title(title, fontsize=14, pad=12)
+    ax.tick_params(labelsize=10)
 
     # Add headroom so bar labels and title don't overlap
     y_max = mi_values.max() if len(mi_values) > 0 else 1.0
-    ax.set_ylim(top=y_max * 1.25)
+    ax.set_ylim(top=y_max * 1.15)
 
     plt.tight_layout()
 
@@ -1121,7 +1131,15 @@ def plot_parameter_correlation_matrix(
     corr_display.index = labels
     corr_display.columns = labels
 
-    fig, ax = plt.subplots(figsize=figsize)
+    # Dynamic sizing: scale figure and annotation size with number of labels
+    n = len(labels)
+    if figsize != (8, 7):  # caller supplied an explicit size — honour it
+        fig_w, fig_h = figsize
+    else:
+        fig_w = max(8, min(36, int(n * 0.85 + 4)))
+        fig_h = max(6, min(36, int(n * 0.85 + 4)))
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    annot_size = max(5, min(14, int(160 / (n + 4))))
     heatmap = sns.heatmap(
         corr_display,
         annot=True,
@@ -1134,13 +1152,15 @@ def plot_parameter_correlation_matrix(
         linewidths=0.5,
         linecolor="white",
         ax=ax,
-        annot_kws={"size": 19},
+        annot_kws={"size": annot_size},
         cbar_kws={"shrink": 0.8},
     )
-    ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_yticklabels(labels, rotation=0)
-    ax.tick_params(labelsize=18)
-    ax.set_title(title, fontsize=18, pad=12)
+    ax.set_xticklabels(
+        labels, rotation=45, ha="right", fontsize=max(7, int(annot_size * 0.95))
+    )
+    ax.set_yticklabels(labels, rotation=0, fontsize=max(7, int(annot_size * 0.95)))
+    ax.tick_params(labelsize=max(7, int(annot_size * 0.95)))
+    ax.set_title(title, fontsize=max(11, int(annot_size * 1.3)), pad=16)
 
     # Increase colorbar tick font size
     cbar = heatmap.collections[0].colorbar
@@ -1148,6 +1168,10 @@ def plot_parameter_correlation_matrix(
         cbar.ax.tick_params(labelsize=16)
 
     plt.tight_layout()
+    # Increase bottom/left margins so rotated x-labels and y-labels aren't clipped
+    bottom = max(0.18, min(0.35, n * 0.015 + 0.1))
+    left = max(0.10, min(0.25, n * 0.010 + 0.06))
+    fig.subplots_adjust(bottom=bottom, left=left)
 
     if show:
         plt.show()

@@ -1,7 +1,7 @@
 import sys
 import textwrap
-import pandas as pd
 
+import pandas as pd
 from IPython.core.display import display_markdown
 
 
@@ -45,6 +45,7 @@ def print_note(
 def print_metrics_table(
     r2: float,
     rmse: float,
+    scale: str,
 ) -> None:
     """
     Print a table of evaluation metrics (R² and RMSE).
@@ -54,17 +55,17 @@ def print_metrics_table(
     r2 : float
         Coefficient of determination between experimental and predicted values.
     rmse : float
-        Root Mean Squared Error (in log scale) between experimental and predicted values.
+        Root Mean Squared Error (add "in log scale" if scale is "log") between experimental and predicted values.
     """
     msg = f"""
     | Metric | Value |
     | ------ | ----- |
-    | Experimental vs Predicted correlation (Coefficient of determination, R²) | {r2} |
-    | Root Mean Squared Error (RMSE in log scale) | {rmse} |
+    | Experimental vs Predicted correlation (Coefficient of determination, R²) | {r2:.2f} |
+    | Root Mean Squared Error (RMSE{f' in {scale} scale' if scale == 'log' else ''}) | {rmse:.2f} |
     """
     alt_message = f"""
-    Experimental vs Predicted correlation (Coefficient of determination, R²): {r2}
-    Root Mean Squared Error (RMSE in log scale): {rmse}
+    Experimental vs Predicted correlation (Coefficient of determination, R²): {r2:.2f}
+    Root Mean Squared Error (RMSE{f' in {scale} scale' if scale == 'log' else ''}): {rmse:.2f}
     """
     print_note(msg, alt_message)
 
@@ -116,6 +117,8 @@ def print_ppv_for_table(
     rec_threshold: float,
     rec_ppv: float,
     rec_for: float,
+    model_quality_set: str,
+    model_quality_opt: str,
 ) -> None:
     """
     Print a table for PPV (Positive Predictive Value)
@@ -135,23 +138,27 @@ def print_ppv_for_table(
         PPV at the recommended threshold.
     rec_for : float
         FOR at the recommended threshold.
+    model_quality : str
+        Model quality at the recommended threshold.
     """
     msg = f"""
-    |  | Prediction Threshold | PPV % | FOR % |
-    | ------ | ----- | ----- | ----- |
-    | Selected Experimental Threshold | {pre_threshold} | {ppv} | {for_val} |
-    | Recommended Threshold | {rec_threshold} | {rec_ppv} | {rec_for} |
+    |  | Prediction Threshold | PPV % | FOR % | Model Quality |
+    | ------ | ----- | ----- | ----- | ----- |
+    | Selected Experimental Threshold | {pre_threshold} | {ppv} | {for_val} | {model_quality_set} |
+    | Recommended Threshold | {rec_threshold} | {rec_ppv} | {rec_for} | {model_quality_opt} |
     """
     alt_message = f"""
     Threshold Type: Selected Experimental Threshold
     Threshold: {pre_threshold}
     PPV at the selected threshold: {ppv}
     FOR at the selected threshold: {for_val}
+    Model Quality at the selected threshold: {model_quality_set}
 
     Threshold Type: Recommended Threshold
     Threshold: {rec_threshold}
     PPV at the selected threshold: {rec_ppv}
     FOR at the selected threshold: {rec_for}
+    Model Quality at the selected threshold: {model_quality_opt}
     """
     print_note(msg, alt_message)
 

@@ -69,8 +69,14 @@ def mutual_information_score(
     >>> mi, threshold = mutual_information_score(X, y)
     >>> significant = mi > threshold
     """
-    X_arr = X.values if hasattr(X, "values") else X
-    y_arr = y.values if hasattr(y, "values") else y
+    # Deduplicate X columns in case caller passed a DataFrame with duplicate names
+    if hasattr(X, "loc") and hasattr(X, "columns"):
+        X = X.loc[:, ~X.columns.duplicated()]
+    X_arr = X.values if hasattr(X, "values") else np.asarray(X)
+    y_arr = y.values if hasattr(y, "values") else np.asarray(y)
+    # Collapse to 1-D if a duplicate column name made y 2-D
+    if y_arr.ndim > 1:
+        y_arr = y_arr[:, 0]
 
     mi_noise_scores = []
 
@@ -233,10 +239,12 @@ def select_features(
     mi, noise_percentile = mutual_information_score(X, y, n_shuffles=n_shuffles)
 
     # Create MI dataframe
-    mi_df = pd.DataFrame({
-        "Feature": valid_cols,
-        "Mutual Information": mi,
-    })
+    mi_df = pd.DataFrame(
+        {
+            "Feature": valid_cols,
+            "Mutual Information": mi,
+        }
+    )
 
     # Select features above noise threshold
     selected_features = mi_df[mi_df["Mutual Information"] > noise_percentile][
@@ -335,8 +343,16 @@ def analyze_feature_importance(
     """
     valid_cols = [c for c in feature_cols if c in df.columns]
 
+    # Deduplicate df columns so df[valid_cols] never returns more columns than len(valid_cols)
+    df = df.loc[:, ~df.columns.duplicated()]
+    # Deduplicate valid_cols preserving order; duplicates cause df[valid_cols] to select a column
+    # twice, but mutual_information_score deduplicates X internally → mi length mismatch
+    valid_cols = list(dict.fromkeys(c for c in valid_cols if c in df.columns))
+
     X = df[valid_cols]
-    y = df[reference_col]
+    # Guard against duplicate column names producing a DataFrame instead of a Series
+    _y_raw = df[reference_col] if reference_col in df.columns else df.iloc[:, 0]
+    y = _y_raw.iloc[:, 0] if isinstance(_y_raw, pd.DataFrame) else _y_raw
 
     # Mutual information
     mi, noise_threshold = mutual_information_score(X, y)
@@ -345,12 +361,14 @@ def analyze_feature_importance(
     correlations = df[valid_cols].corrwith(y).abs()
 
     # Build result dataframe
-    result = pd.DataFrame({
-        "Feature": valid_cols,
-        "Mutual Information": mi,
-        "Correlation": correlations.values,
-        "Above Noise": mi > noise_threshold,
-    }).sort_values("Mutual Information", ascending=False)
+    result = pd.DataFrame(
+        {
+            "Feature": valid_cols,
+            "Mutual Information": mi,
+            "Correlation": correlations.values,
+            "Above Noise": mi > noise_threshold,
+        }
+    ).sort_values("Mutual Information", ascending=False)
 
     if verbose:
         print(f"Noise threshold: {noise_threshold:.4f}")
