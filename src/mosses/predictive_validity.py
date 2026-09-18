@@ -258,7 +258,7 @@ def calculate_and_plot(
         # shape `calculate_heatmap_metrics` builds and reusing the same
         # policy functions verbatim -- no logic duplication.
         #
-        # Backlog (Jenny): instead of snapping back to SET, search for a
+        # Backlog: instead of snapping back to SET, search for a
         # nearby threshold that improves predictive balance vs SET while
         # still keeping PPV / model-quality above the "Bad" cutoff. Not
         # implemented now.

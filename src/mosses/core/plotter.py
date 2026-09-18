@@ -516,7 +516,7 @@ class Plotter:
                     text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle="<->", color="plum"),
+                    arrowprops=dict(arrowstyle="<->", color="#CC79A7", linestyle="dashed", lw=2),
                 )
 
             ax2 = ax.twinx()
@@ -567,7 +567,7 @@ class Plotter:
                     text="",
                     xy=(max_thresh, max_for),
                     xytext=(max_thresh, max_ppv),
-                    arrowprops=dict(arrowstyle="<->", color="plum"),
+                    arrowprops=dict(arrowstyle="<->", color="#CC79A7", linestyle="dashed", lw=2),
                 )
             ax2 = ax.twinx()
             ax2.plot(threshold, obs, color="grey", marker="o")
@@ -696,7 +696,7 @@ class Plotter:
                             _t,
                             metrics.desired_pred_pos,
                         ),
-                        arrowprops=dict(arrowstyle="<->", color="plum"),
+                        arrowprops=dict(arrowstyle="<->", color="#CC79A7", linestyle="dashed", lw=2),
                     )
 
             ax2 = ax.twinx()
@@ -753,7 +753,7 @@ class Plotter:
                         text="",
                         xy=(desired_threshold, metrics.desired_pred_neg),
                         xytext=(desired_threshold, metrics.desired_pred_pos),
-                        arrowprops=dict(arrowstyle="<->", color="plum"),
+                        arrowprops=dict(arrowstyle="<->", color="#CC79A7", linestyle="dashed", lw=2),
                     )
 
             ax2 = ax.twinx()
@@ -898,15 +898,17 @@ class Plotter:
             ax.plot(
                 agg_df["model_version"],
                 agg_df[metric],
-                color="deeppink",
+                color="#0072B2",
                 marker="o",
+                linestyle="-",
                 label=f"{metric.upper()}",
             )
             ax2.plot(
                 agg_df["model_version"],
                 agg_df["no_of_cpds"],
                 color="grey",
-                marker="o",
+                marker="^",
+                linestyle="--",
                 label="No. of compounds",
             )
 
@@ -919,8 +921,8 @@ class Plotter:
 
             ax.set_title(plot_title + " - Model performance over time")
             handles = [
-                Line2D([], [], color="deeppink", marker="o", label=f"{metric.upper()}"),
-                Line2D([], [], color="grey", marker="o", label="No. of compounds"),
+                Line2D([], [], color="#0072B2", marker="o", linestyle="-", label=f"{metric.upper()}"),
+                Line2D([], [], color="grey", marker="^", linestyle="--", label="No. of compounds"),
             ]
             ax.legend(
                 handles=handles,

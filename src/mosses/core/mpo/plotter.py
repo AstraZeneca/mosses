@@ -531,7 +531,7 @@ def plot_mpo_scatter_with_thresholds(
     horizontal_threshold : float | None
         Green horizontal line at the in-vitro MPO goal score (y-axis).
     vertical_threshold : float | None
-        Pink vertical line at the recommended in-silico MPO cutoff (x-axis).
+        Dash-dot vertical line (reddish purple) at the recommended in-silico MPO cutoff (x-axis).
     title, xlabel, ylabel : str
         Plot labels.
     figsize : tuple[int, int]
@@ -582,7 +582,7 @@ def plot_mpo_scatter_with_thresholds(
         ax.axhline(horizontal_threshold, color="green", linestyle="--",
                    linewidth=2, alpha=0.8, label=f"Goal MPO = {horizontal_threshold:.1f}")
     if vertical_threshold is not None:
-        ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
+        ax.axvline(vertical_threshold, color="#CC79A7", linestyle="-.",
                    linewidth=2, alpha=0.8,
                    label=(
                        vertical_threshold_label
@@ -711,7 +711,7 @@ def plot_ppv_for(
     ax.fill_between(thresholds, for_rate * 100, alpha=0.10, color="orange")
 
     if vertical_threshold is not None:
-        ax.axvline(vertical_threshold, color="#E91E63", linestyle="--",
+        ax.axvline(vertical_threshold, color="#CC79A7", linestyle="--",
                    linewidth=2, alpha=0.8,
                    label=f"Threshold = {vertical_threshold:.3f}")
 
@@ -776,7 +776,7 @@ def compute_mpo_likelihood_metrics(
     horizontal_threshold : float
         In-vitro MPO goal score.
     vertical_threshold : float | None
-        Selected in-silico threshold (for the pink arrow).
+        Selected in-silico threshold (for the dashed reddish-purple arrow).
     n_points : int
         Number of threshold points to evaluate.
 
@@ -904,8 +904,8 @@ def plot_mpo_likelihood(
     Replicates the visual style of the model-evaluation tab's
     enrichment plot: turquoise PPV with CI band, indigo FOR with CI
     band, grey ``% compounds tested`` on a secondary y-axis, and
-    double-headed arrows indicating the best threshold (green) and
-    the user-selected threshold (pink).
+    double-headed arrows indicating the best threshold (solid green) and
+    the user-selected threshold (dashed reddish purple).
 
     Parameters
     ----------
@@ -914,7 +914,7 @@ def plot_mpo_likelihood(
     metrics : MpoLikelihoodMetrics
         Precomputed enrichment metrics.
     vertical_threshold : float | None
-        Selected in-silico threshold (pink arrow position).
+        Selected in-silico threshold (dashed reddish-purple arrow position).
     title : str
         Plot title.
     figsize : tuple[int, int]
@@ -968,7 +968,7 @@ def plot_mpo_likelihood(
                 text="",
                 xy=(vertical_threshold, metrics.desired_for),
                 xytext=(vertical_threshold, metrics.desired_ppv),
-                arrowprops=dict(arrowstyle="<->", color="plum", lw=2),
+                arrowprops=dict(arrowstyle="<->", color="#CC79A7", lw=2, linestyle="dashed"),
             )
 
     # --- Secondary y-axis: % compounds tested ---
@@ -1004,7 +1004,7 @@ def plot_mpo_likelihood(
         labels.append("Highest Predictive Balance (PPV-FOR)")
     if vertical_threshold is not None:
         handles.append(
-            Line2D([], [], color="plum", linewidth=2),
+            Line2D([], [], color="#CC79A7", linewidth=2, linestyle="dashed"),
         )
         labels.append(
             selected_threshold_label

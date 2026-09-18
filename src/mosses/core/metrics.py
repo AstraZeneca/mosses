@@ -469,6 +469,25 @@ def _format_month_year(
         raise ValueError("Error parsing 'SampleRegDate'. Expected format '%d-%b-%Y'.")
 
 
+def _parse_model_version_dates(series: pd.Series) -> pd.Series:
+    """
+    Parse a ``model_version`` column into normalized (date-only) timestamps.
+
+    Values are known to arrive in more than one format -- dotted date
+    with a dashed time suffix (``YYYY.MM.DD-HHMM``) and dashed
+    day-month-year (``DD-Mon-YYYY``, e.g. "07-Jun-2021") -- so
+    ``format="mixed"`` lets pandas infer each value's format
+    independently instead of locking onto whichever format the first
+    row happens to use (which silently turns every other format into
+    NaT). Non-string values (e.g. NaN for a missing model version) are
+    filtered out before parsing, since a stray numeric value would
+    otherwise be read as a nanosecond Unix timestamp instead of being
+    treated as missing.
+    """
+    strings_only = series.apply(lambda x: x if isinstance(x, str) else None)
+    return pd.to_datetime(strings_only, format="mixed", errors="coerce").dt.normalize()
+
+
 def _aggregate_exp_values(
     df: pd.DataFrame,
 ):
@@ -561,13 +580,7 @@ def aggregate_model_stability_data(
             - The index is set to the datetime
               representation of 'model_version'.
     """
-    df["model_version_date"] = df[model_version_col].apply(
-        lambda x: x.split("-")[0],
-    )
-    df["model_version_date"] = pd.to_datetime(
-        df["model_version_date"],
-        errors="coerce",
-    )
+    df["model_version_date"] = _parse_model_version_dates(df[model_version_col])
     df["model_month_year"] = df["model_version_date"].apply(
         lambda x: x.strftime("%b %Y") if pd.notnull(x) else None
     )
@@ -943,11 +956,7 @@ def compute_time_weighted_scores(
     w_scores : np.ndarray
     """
     df = df.copy()
-    df["model_version_date"] = df[model_version_col].apply(lambda x: x.split("-")[0])
-    df["model_version_date"] = pd.to_datetime(
-        df["model_version_date"],
-        errors="coerce",
-    )
+    df["model_version_date"] = _parse_model_version_dates(df[model_version_col])
     oe, pe = _resolve_ops(scale, op_exp, op_pred)
     if needs_log_axis(oe) and needs_log_axis(pe):
         df = df[((df["observed"] != 0) & (df["predicted"] != 0))]
