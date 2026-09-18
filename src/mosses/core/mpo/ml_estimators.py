@@ -189,8 +189,10 @@ def rf_regression(
 
     train_mse = mean_squared_error(y_train, y_train_pred)
     test_mse = mean_squared_error(y_test, y_test_pred)
-    train_r2 = r2_score(y_train, y_train_pred)
-    test_r2 = r2_score(y_test, y_test_pred)
+    train_r2_val = r2_score(y_train, y_train_pred)
+    test_r2_val = r2_score(y_test, y_test_pred)
+    train_r2 = 0.0 if train_r2_val < 0.0 else float(train_r2_val)
+    test_r2 = 0.0 if test_r2_val < 0.0 else float(test_r2_val)
 
     importance_dict = dict(zip(feature_cols, model.feature_importances_))
 

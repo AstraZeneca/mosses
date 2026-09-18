@@ -1298,7 +1298,8 @@ def plot_best_fit_scatter(
     actual_reshaped = actual_arr.reshape(-1, 1)
     model.fit(actual_reshaped, pred_arr)
     best_fit = model.predict(actual_reshaped)
-    r_squared = r2_score(pred_arr, best_fit)
+    r2_val = r2_score(pred_arr, best_fit)
+    r_squared = 0.0 if r2_val < 0.0 else float(r2_val)
 
     fig, ax = plt.subplots(figsize=(7, 7))
     ax.scatter(actual_arr, pred_arr, alpha=0.7, color="blue", label=label)

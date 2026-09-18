@@ -604,7 +604,7 @@ def aggregate_model_stability_data(
         lambda x: rmse_score(x["observed"], x["predicted"], scale, op_exp=op_exp, op_pred=op_pred),
     )
     agg_df["r2"] = grouped.apply(
-        lambda x: r2_score(x["observed"], x["predicted"]),
+        lambda x: round(max(0.0, float(r2_score(x["observed"], x["predicted"]))), 2),
     )
     agg_df["no_of_cpds"] = grouped["observed"].count()
     agg_df["model_version"] = agg_df.index
@@ -1365,7 +1365,8 @@ def calculate_heatmap_metrics(
             df = df[df.predicted != 0]
         t_obs = apply_operation(df.observed.values, oe)
         t_pred = apply_operation(df.predicted.values, pe)
-        r2 = round(r2_score(t_obs, t_pred), 2)
+        r2_val = r2_score(t_obs, t_pred)
+        r2 = round(0.0 if r2_val < 0.0 else float(r2_val), 2)
         # Pearson R (Spearman rho) — keep Pearson R2 and also report Spearman
         try:
             spearman_val = round(float(spearmanr(t_obs, t_pred).correlation), 2)
