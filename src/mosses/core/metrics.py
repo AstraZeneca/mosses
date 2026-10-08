@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,17 @@ from sklearn.metrics import (
     r2_score,
 )
 from sklearn.preprocessing import StandardScaler
+
+try:
+    from rdkit import DataStructs, RDLogger
+    from rdkit.Chem import MolFromSmiles, rdFingerprintGenerator
+
+    # SMILES that RDKit cannot parse are reported by the caller as a missing
+    # structure, so the per-molecule parser warnings are pure noise here.
+    RDLogger.DisableLog("rdApp.*")
+    RDKIT_AVAILABLE = True
+except ImportError:  # pragma: no cover - environments without a chemistry stack
+    RDKIT_AVAILABLE = False
 
 
 def _safe_savgol(
@@ -174,6 +186,25 @@ def rmse_score(
     obs = obs[_mask]
     pred = pred[_mask]
     return round(math.sqrt(mean_squared_error(apply_operation(obs, oe), apply_operation(pred, pe))), 2)
+
+
+def _pearson_r2(obs: np.ndarray, pred: np.ndarray) -> float:
+    """
+    The R-squared reported throughout the predictive-validity views.
+
+    Squared Pearson correlation of observed vs. predicted (falling back to
+    the coefficient of determination if the correlation cannot be computed),
+    clamped at 0. The headline R2 of the scatter plot, the cumulative R2 and
+    the per-month R2 all come from here, so they are directly comparable and
+    the last cumulative value equals the headline one. Inputs must already be
+    on the modelling scale (i.e. after any log transformation).
+    """
+    try:
+        r, _ = pearsonr(obs, pred)
+        r2_val = (r * r) if r is not None else r2_score(obs, pred)
+    except Exception:
+        r2_val = r2_score(obs, pred)
+    return 0.0 if r2_val < 0.0 else float(r2_val)
 
 
 def thresh_selection(
@@ -441,6 +472,184 @@ def correlation_score(
         return corr_score
 
 
+#: Column names that are known to hold compound structures as SMILES.
+#: ``Structure`` is what the D360 project exports use, ``Smiles`` /
+#: ``structure`` what the example and manuscript datasets use.
+STRUCTURE_COLUMN_CANDIDATES = (
+    "structure",
+    "smiles",
+    "canonical smiles",
+    "canonical_smiles",
+)
+
+#: Morgan fingerprint settings. Radius 2 over 2048 bits is ECFP4, the
+#: de-facto default for Tanimoto similarity between drug-like structures.
+MORGAN_RADIUS = 2
+MORGAN_FP_SIZE = 2048
+
+
+def resolve_structure_column(
+    df: pd.DataFrame,
+    structure_col: str | None = None,
+) -> str | None:
+    """
+    Find the column holding compound structures (SMILES).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to inspect.
+    structure_col : str, optional
+        Explicitly configured column name. When given it is used as-is
+        (and ``None`` is returned if it is absent from `df`), so a project
+        that names its structure column unconventionally can opt in
+        without relying on the candidate list.
+
+    Returns
+    -------
+    str or None
+        The resolved column name, or ``None`` when the data carries no
+        structures.
+    """
+    if structure_col:
+        return structure_col if structure_col in df.columns else None
+
+    lookup = {str(col).strip().casefold(): col for col in df.columns}
+    for candidate in STRUCTURE_COLUMN_CANDIDATES:
+        if candidate in lookup:
+            return lookup[candidate]
+    return None
+
+
+def morgan_fingerprints(
+    smiles: "pd.Series | list[str | None]",
+    radius: int = MORGAN_RADIUS,
+    n_bits: int = MORGAN_FP_SIZE,
+) -> list:
+    """
+    Build Morgan (ECFP-like) fingerprints for a sequence of SMILES.
+
+    Parameters
+    ----------
+    smiles : pd.Series or list
+        SMILES strings. Missing / unparseable entries are tolerated.
+    radius : int, optional
+        Morgan radius, by default 2 (i.e. ECFP4).
+    n_bits : int, optional
+        Fingerprint length in bits, by default 2048.
+
+    Returns
+    -------
+    list
+        Fingerprints positionally aligned with `smiles`; entries that could
+        not be parsed are ``None``.
+
+    Raises
+    ------
+    ImportError
+        If RDKit is not installed.
+    """
+    if not RDKIT_AVAILABLE:
+        raise ImportError(
+            "RDKit is required to compute structural similarity. "
+            "Install it with `pip install rdkit`."
+        )
+
+    generator = rdFingerprintGenerator.GetMorganGenerator(
+        radius=radius,
+        fpSize=n_bits,
+    )
+    # The same compound usually appears at several timepoints, so parsing is
+    # memoised on the SMILES string rather than repeated per row.
+    cache: dict[str, Any] = {}
+    fingerprints = []
+    for smi in smiles:
+        if not isinstance(smi, str) or not smi.strip():
+            fingerprints.append(None)
+            continue
+        if smi not in cache:
+            mol = MolFromSmiles(smi)
+            cache[smi] = generator.GetFingerprint(mol) if mol is not None else None
+        fingerprints.append(cache[smi])
+    return fingerprints
+
+
+def _mean_nearest_neighbour_tanimoto(
+    ref_fps: list,
+    test_fps: list,
+) -> float:
+    """
+    Average over test compounds of the Tanimoto similarity to their most
+    similar reference compound.
+
+    This mirrors the aggregation used by :func:`similarity_score`: each test
+    compound is scored against its nearest neighbour in the reference set,
+    and the scores are averaged.
+
+    Parameters
+    ----------
+    ref_fps : list
+        Reference (training) fingerprints. Must not contain ``None``.
+    test_fps : list
+        Test (prospective) fingerprints. Must not contain ``None``.
+
+    Returns
+    -------
+    float
+        Mean nearest-neighbour Tanimoto similarity in [0, 1], or ``NaN``
+        when either side is empty.
+    """
+    if not ref_fps or not test_fps:
+        return float("nan")
+
+    return float(
+        np.mean(
+            [max(DataStructs.BulkTanimotoSimilarity(fp, ref_fps)) for fp in test_fps]
+        )
+    )
+
+
+def structural_similarity_score(
+    ref_smiles: "pd.Series | list[str | None]",
+    test_smiles: "pd.Series | list[str | None]",
+    radius: int = MORGAN_RADIUS,
+    n_bits: int = MORGAN_FP_SIZE,
+) -> float:
+    """
+    Compute how structurally similar a test set is to a reference set.
+
+    Each test compound is compared to its nearest neighbour in the reference
+    set by Tanimoto similarity over Morgan fingerprints, and the resulting
+    per-compound similarities are averaged. A score of 1 means every test
+    compound has an identical counterpart in the reference set; values near
+    0 mean the test set explores new chemistry.
+
+    Parameters
+    ----------
+    ref_smiles : pd.Series or list
+        SMILES of the reference (e.g. training) compounds.
+    test_smiles : pd.Series or list
+        SMILES of the test (e.g. prospective) compounds.
+    radius : int, optional
+        Morgan radius, by default 2 (i.e. ECFP4).
+    n_bits : int, optional
+        Fingerprint length in bits, by default 2048.
+
+    Returns
+    -------
+    float
+        Mean nearest-neighbour Tanimoto similarity in [0, 1], or ``NaN``
+        when either set has no parseable structure.
+    """
+    ref_fps = [
+        fp for fp in morgan_fingerprints(ref_smiles, radius, n_bits) if fp is not None
+    ]
+    test_fps = [
+        fp for fp in morgan_fingerprints(test_smiles, radius, n_bits) if fp is not None
+    ]
+    return _mean_nearest_neighbour_tanimoto(ref_fps, test_fps)
+
+
 def _format_month_year(
     df: pd.DataFrame,
     sample_reg_date_col: str,
@@ -623,6 +832,74 @@ def aggregate_model_stability_data(
     return agg_df
 
 
+def aggregate_cumulative_r2(
+    df: pd.DataFrame,
+    scale: str,
+    model_version_col: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+) -> pd.DataFrame:
+    """
+    R-squared over all prospective compounds up to and including each month.
+
+    Model versions released in the same calendar month form one step. Each
+    value is computed exactly like the headline R2 of the scatter plot
+    (:func:`compute_scatter_metrics`) on the growing set, so the curve ends
+    at that headline R2 (when every compound has a model version).
+
+    Unlike :func:`aggregate_model_stability_data`, a month does not need 5
+    compounds of its own to get a point: the R2 is over the cumulative set,
+    so a small month still has a meaningful value -- which matters most for
+    the latest months, often the smallest. Points start once the cumulative
+    set reaches 5 compounds.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The prospective validation compounds (the test set), with raw
+        'observed' and 'predicted' columns.
+    scale : str
+    model_version_col : str
+    op_exp, op_pred : str, optional
+        Operations on the experimental / predicted columns (e.g. "Log").
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per month, oldest first, with columns 'model_version'
+        (month label, e.g. 'Jul 2026'), 'datetime' (month start),
+        'no_of_cpds' (compounds of that month), 'no_of_cpds_cumulative'
+        and 'r2_cumulative'.
+    """
+    columns = ["model_version", "datetime", "no_of_cpds",
+               "no_of_cpds_cumulative", "r2_cumulative"]
+    month = (
+        _parse_model_version_dates(df[model_version_col])
+        .dt.to_period("M")
+        .dt.to_timestamp()
+    )
+    counts = df["observed"].groupby(month).count().sort_index()
+    if counts.empty:
+        return pd.DataFrame(columns=columns)
+
+    cum_df = pd.DataFrame(
+        {
+            "model_version": [m.strftime("%b %Y") for m in counts.index],
+            "datetime": counts.index,
+            "no_of_cpds": counts.to_numpy(),
+            "no_of_cpds_cumulative": counts.cumsum().to_numpy(),
+        }
+    )
+    cum_df = cum_df[cum_df["no_of_cpds_cumulative"] >= 5].reset_index(drop=True)
+    cum_df["r2_cumulative"] = [
+        compute_scatter_metrics(
+            df[month <= m], scale, op_exp=op_exp, op_pred=op_pred
+        ).r2
+        for m in cum_df["datetime"]
+    ]
+    return cum_df[columns]
+
+
 def compute_lineplot_metrics(
     threshold: np.ndarray, metric1: np.ndarray, metric2: np.ndarray, scale: str,
     op_pred: str | None = None,
@@ -724,14 +1001,14 @@ def compute_likelihood_metrics(
 
         desired_threshold_df["pred_pos_likelihood"] = (
             likelihood_value_for_nan
-            if math.isnan(desired_threshold_df["pred_pos_likelihood"])
-            else int(desired_threshold_df["pred_pos_likelihood"])
+            if math.isnan(desired_threshold_df["pred_pos_likelihood"].iloc[0])
+            else int(desired_threshold_df["pred_pos_likelihood"].iloc[0])
         )
 
         desired_threshold_df["pred_neg_likelihood"] = (
             likelihood_value_for_nan
-            if math.isnan(desired_threshold_df["pred_neg_likelihood"])
-            else int(desired_threshold_df["pred_neg_likelihood"])
+            if math.isnan(desired_threshold_df["pred_neg_likelihood"].iloc[0])
+            else int(desired_threshold_df["pred_neg_likelihood"].iloc[0])
         )
     else:
         ci_metrics = metrics_ci(threshold, filt_pred_pos, filt_pred_neg)
@@ -746,14 +1023,14 @@ def compute_likelihood_metrics(
 
         desired_threshold_df["pred_pos_likelihood"] = (
             likelihood_value_for_nan
-            if math.isnan(desired_threshold_df["pred_pos_likelihood"])
-            else int(desired_threshold_df["pred_pos_likelihood"])
+            if math.isnan(desired_threshold_df["pred_pos_likelihood"].iloc[0])
+            else int(desired_threshold_df["pred_pos_likelihood"].iloc[0])
         )
 
         desired_threshold_df["pred_neg_likelihood"] = (
             likelihood_value_for_nan
-            if math.isnan(desired_threshold_df["pred_neg_likelihood"])
-            else int(desired_threshold_df["pred_neg_likelihood"])
+            if math.isnan(desired_threshold_df["pred_neg_likelihood"].iloc[0])
+            else int(desired_threshold_df["pred_neg_likelihood"].iloc[0])
         )
 
     return LikelihoodMetrics(
@@ -924,6 +1201,34 @@ def compute_threshold_metrics(
     return all_metrics_df
 
 
+def _row_fingerprints(
+    df: pd.DataFrame,
+    structure_col: str | None,
+) -> np.ndarray | None:
+    """
+    Fingerprint every row of `df`, or return ``None`` when the data carries
+    no structures or RDKit is unavailable.
+
+    The result is a positionally aligned object array, so the boolean masks
+    that split the data by timepoint can index it directly.
+    """
+    resolved = resolve_structure_column(df, structure_col)
+    if resolved is None or not RDKIT_AVAILABLE:
+        return None
+
+    fingerprints = morgan_fingerprints(df[resolved])
+    # Assigning into an empty object array keeps the fingerprints as opaque
+    # elements; np.array() would try to unpack each bit vector instead.
+    aligned = np.empty(len(fingerprints), dtype=object)
+    aligned[:] = fingerprints
+    return aligned
+
+
+def _present(fingerprints: np.ndarray) -> list:
+    """Drop the entries whose structure could not be parsed."""
+    return [fp for fp in fingerprints if fp is not None]
+
+
 def compute_time_weighted_scores(
     df: pd.DataFrame,
     model_version_col: str,
@@ -931,9 +1236,23 @@ def compute_time_weighted_scores(
     scale: str,
     op_exp: str | None = None,
     op_pred: str | None = None,
-) -> tuple[list[str], np.ndarray, np.ndarray]:
+    structure_col: str | None = None,
+    merge_months: bool = False,
+    prospective_index: pd.Index | None = None,
+) -> tuple[list[str], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute time-weighted similarity and correlation scores over time.
+
+    At every timepoint the compounds predicted at that timepoint are the
+    prospective set and everything predicted earlier is the reference set.
+    Three similarities are reported for each timepoint: similarity of the
+    data, similarity of the correlations, and -- when the data carries
+    structures -- similarity of the structures themselves. A fourth,
+    R-squared, is not a similarity-to-reference metric but the predictive
+    accuracy on the prospective compounds of that timepoint; it is computed
+    here so it shares the timepoints of the other three and can be read off
+    the same x-axis, e.g. to see whether an accuracy drop lines up with a
+    structural-novelty dip.
 
     Parameters
     ----------
@@ -946,14 +1265,40 @@ def compute_time_weighted_scores(
         put more weight on recent scores.
         Setting discount_factor=1 is equivalent to uniform weighting.
     scale : str
+    structure_col : str, optional
+        Column holding compound SMILES. When omitted the column is
+        auto-detected (see :func:`resolve_structure_column`); when no such
+        column exists, or RDKit is unavailable, the structural similarities
+        are returned as an empty array and the rest is unaffected.
+    merge_months : bool, optional
+        If True, model versions released in the same calendar month are
+        pooled into a single timepoint, so every label is unique. By default
+        each release date is its own timepoint (which is what the heatmap's
+        stability score is built on).
+    prospective_index : pd.Index, optional
+        Index labels of the prospective validation compounds (the test set).
+        When given, R-squared is computed on those compounds only, exactly
+        like the headline R2 of the scatter plot; otherwise on every
+        compound of the timepoint.
 
     Returns
     -------
     t_labels : list[str]
         List of month-year labels (e.g. ['Feb 2020', 'Mar 2020', ...])
-        corresponding to each timepoint (excluding the first).
+        corresponding to each timepoint (excluding the first). Two versions
+        released in the same month share a label unless `merge_months`.
     scores : np.ndarray
+        Per-timepoint ``[similarity of data, similarity of correlations]``.
     w_scores : np.ndarray
+        Time-weighted counterpart of `scores`.
+    struct_scores : np.ndarray
+        Per-timepoint structural similarity of the prospective compounds to
+        all earlier ones, or an empty array when structures are unavailable.
+    r2_scores : np.ndarray
+        Per-timepoint R-squared of predicted vs. observed within the
+        timepoint's prospective compounds (not compared against the
+        reference set), using the same definition as the headline R2
+        (see :func:`_pearson_r2`). NaN where fewer than 5 compounds qualify.
     """
     df = df.copy()
     df["model_version_date"] = _parse_model_version_dates(df[model_version_col])
@@ -968,15 +1313,30 @@ def compute_time_weighted_scores(
         df["observed"] = apply_operation(df["observed"].values, oe)
         df["predicted"] = apply_operation(df["predicted"].values, pe)
 
-    df_sorted = df.sort_values(by="model_version_date")
+    if merge_months:
+        df["timepoint"] = (
+            df["model_version_date"].dt.to_period("M").dt.to_timestamp()
+        )
+    else:
+        df["timepoint"] = df["model_version_date"]
+    if prospective_index is not None:
+        is_prospective = df.index.isin(prospective_index)
+    else:
+        is_prospective = np.ones(len(df), dtype=bool)
 
-    t_arr, _ = np.unique(df_sorted["model_version_date"], return_counts=True)
+    df_sorted = df.sort_values(by="timepoint")
+
+    fingerprints = _row_fingerprints(df, structure_col)
+
+    t_arr, _ = np.unique(df_sorted["timepoint"], return_counts=True)
     t_all = []
     scores_list = []
+    struct_list = []
+    r2_list = []
 
     for t in t_arr[1:]:
-        train_mask = df["model_version_date"] < t
-        test_mask = df["model_version_date"] == t
+        train_mask = df["timepoint"] < t
+        test_mask = df["timepoint"] == t
         train_df = df[train_mask]
         prospective_df = df[test_mask]
         if (len(train_df) >= 5) and (len(prospective_df) >= 5):
@@ -1001,11 +1361,31 @@ def compute_time_weighted_scores(
                 return_nbr_idx=False,
             )
             scores_list.append([sim_score, corr_score])
+            if fingerprints is not None:
+                struct_list.append(
+                    _mean_nearest_neighbour_tanimoto(
+                        _present(fingerprints[train_mask.to_numpy()]),
+                        _present(fingerprints[test_mask.to_numpy()]),
+                    )
+                )
+            # Training compounds say nothing about predictive accuracy, so
+            # R2 uses the prospective ones only, like the headline R2.
+            r2_rows = prospective_df[is_prospective[test_mask.to_numpy()]]
+            r2_list.append(
+                _pearson_r2(
+                    r2_rows["observed"].to_numpy(),
+                    r2_rows["predicted"].to_numpy(),
+                )
+                if len(r2_rows) >= 5
+                else np.nan
+            )
             t_all.append(t)
     if len(scores_list) == 0:
-        return [], np.array([]), np.array([])
+        return [], np.array([]), np.array([]), np.array([]), np.array([])
 
     scores = np.vstack(scores_list)
+    struct_scores = np.array(struct_list, dtype=float)
+    r2_scores = np.array(r2_list, dtype=float)
 
     n = len(t_all)
 
@@ -1019,7 +1399,7 @@ def compute_time_weighted_scores(
             _date.astype("datetime64[D]").astype(datetime).strftime("%b %Y")
         )
 
-    return t_labels, scores, w_scores
+    return t_labels, scores, w_scores, struct_scores, r2_scores
 
 
 def compute_scatter_metrics(
@@ -1056,14 +1436,7 @@ def compute_scatter_metrics(
     obs = apply_operation(df["observed"].values, oe)
     pred = apply_operation(df["predicted"].values, pe)
 
-    # Compute Pearson correlation and convert to R^2. Fallback to r2_score
-    try:
-        r, _ = pearsonr(obs, pred)
-        r2_val = (r * r) if r is not None else r2_score(obs, pred)
-    except Exception:
-        r2_val = r2_score(obs, pred)
-
-    r2_val_mod = 0.00 if r2_val < 0.0 else float(r2_val)
+    r2_val_mod = _pearson_r2(obs, pred)
     rmse_val = math.sqrt(mean_squared_error(obs, pred))
 
     return ScatterMetrics(
@@ -1420,7 +1793,10 @@ def calculate_heatmap_metrics(
         # Calculate weighted scores and pick the worst case scenario
         # based on the last weighted score
         discount_factor = 0.9
-        _, _, w_scores = compute_time_weighted_scores(
+        # The heatmap only grades stability from the data/correlation
+        # scores; `df_all` carries no structures, so the structural
+        # similarity and the per-timepoint R2 are discarded here.
+        _, _, w_scores, _, _ = compute_time_weighted_scores(
             df=df_all,
             model_version_col="ModelVersion",
             discount_factor=discount_factor,

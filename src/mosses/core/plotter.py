@@ -804,12 +804,43 @@ class Plotter:
         fig.subplots_adjust(bottom=0.25)
         plt.show()
 
+    @staticmethod
+    def _set_month_ticks(
+        ax: matplotlib.axes.Axes,
+        labels: list[str],
+        max_labels: int = 30,
+    ) -> np.ndarray:
+        """
+        Put one tick per point and label them with `labels`, returning the x
+        positions to plot against.
+
+        The points are plotted against their position rather than the labels
+        themselves, which matplotlib would read as categories -- collapsing
+        repeated labels onto one position and putting the tick labels out of
+        step with the data. Past `max_labels` points only every n-th tick is
+        labelled, counted back from the last one so the most recent month is
+        always named.
+        """
+        x_pos = np.arange(len(labels))
+        step = -(-len(labels) // max_labels) if len(labels) else 1
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(
+            [
+                label if (len(labels) - 1 - i) % step == 0 else ""
+                for i, label in enumerate(labels)
+            ],
+            rotation=90,
+        )
+        return x_pos
+
     def plot_time_weighted_scores(
         self,
         t_labels: list[str],
         scores: np.ndarray,
         w_scores: np.ndarray,
         plot_title: str,
+        struct_scores: np.ndarray | None = None,
+        r2_scores: np.ndarray | None = None,
     ) -> None:
         """
         Plot the raw and time-weighted similarity
@@ -825,6 +856,16 @@ class Plotter:
             Array containing time-weighted similarity and correlation scores.
         plot_title : str
             Title for the plot.
+        struct_scores : np.ndarray, optional
+            Structural (Tanimoto) similarity of the prospective compounds to
+            the earlier ones. Omitted from the plot when the data carries no
+            structures.
+        r2_scores : np.ndarray, optional
+            R-squared of predicted vs. observed for each timepoint's
+            prospective compounds. Plotted on the same [0, 1] axis as the
+            similarity metrics so an accuracy drop can be read directly
+            against a structural-novelty dip at the same x position; gaps
+            mark timepoints with too few prospective compounds.
         """
         if len(t_labels) <= 1 or scores.size == 0:
             print(
@@ -835,38 +876,63 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
 
+        x_pos = self._set_month_ticks(ax, t_labels)
+
         ax.plot(
-            t_labels,
+            x_pos,
             scores[:, 0],
             color="blue",
             label="Similarity of data",
         )
         ax.plot(
-            t_labels,
+            x_pos,
             scores[:, 1],
             color="red",
             label="Similarity of correlations",
         )
         ax.plot(
-            t_labels,
+            x_pos,
             w_scores[:, 0],
             color="cyan",
             label="Similarity of data (Time-weighted)",
         )
         ax.plot(
-            t_labels,
+            x_pos,
             w_scores[:, 1],
             color="orange",
             label="Similarity of correlations (Time-weighted)",
         )
+        if struct_scores is not None and np.any(np.isfinite(struct_scores)):
+            ax.plot(
+                x_pos,
+                struct_scores,
+                color="black",
+                linestyle="--",
+                label="Similarity of structures",
+            )
+        if r2_scores is not None and np.any(np.isfinite(r2_scores)):
+            ax.plot(
+                x_pos,
+                r2_scores,
+                color="#7b2d6f",
+                marker="o",
+                markersize=3,
+                label="R\u00b2 per month (prospective)",
+            )
 
         ax.set_xlabel("Model version", fontweight="bold")
         ax.set_ylabel("Scores", fontweight="bold")
-        ax.set_xticklabels(t_labels, rotation=90)
         plt.rc("xtick", labelsize=8)
         plt.rc("ytick", labelsize=8)
 
-        ax.legend(fontsize=7)
+        # Below the axes: inside, it covers the low end of the scale where
+        # the R2 line often runs.
+        ax.legend(
+            bbox_to_anchor=(0.5, -0.3),
+            loc="upper center",
+            ncol=2,
+            fontsize=7,
+        )
         plt.title(plot_title)
         ax.set_ylim(0, 1.1)
         plt.tight_layout()
@@ -876,36 +942,63 @@ class Plotter:
         self,
         agg_df: pd.DataFrame,
         plot_title: str,
+        cumulative_df: pd.DataFrame | None = None,
     ) -> None:
         """
         Plot model stability over time using aggregated data.
 
         Assumes that `agg_df` has been aggregated via
-        MetricsCalculator.aggregate_model_stability_data.
+        MetricsCalculator.aggregate_model_stability_data, and
+        `cumulative_df` via MetricsCalculator.aggregate_cumulative_r2.
+
+        RMSE is shown per month. R2 is shown cumulatively -- over all
+        prospective compounds up to each month -- when `cumulative_df` is
+        given, because R2 of a single small monthly batch is too unstable to
+        read; together with the cumulative compound count it shows how many
+        compounds it takes for the model to reach a stable R2. Without
+        `cumulative_df` the per-month R2 of `agg_df` is shown instead.
 
         Parameters
         ----------
         agg_df : pd.DataFrame
-            Aggregated data with columns 'rmse' and 'no_of_cpds'.
+            Aggregated data with columns 'rmse', 'r2' and 'no_of_cpds'.
         plot_title : str
             Title for the plot.
+        cumulative_df : pd.DataFrame, optional
+            Cumulative data with columns 'r2_cumulative' and
+            'no_of_cpds_cumulative'.
         """
-        for metric in ["rmse", "r2"]:
+        count_legend = "No. of compounds considered for prediction each month"
+        panels = [
+            (agg_df, "rmse", "no_of_cpds", "RMSE", "RMSE over time", count_legend),
+        ]
+        if cumulative_df is not None and len(cumulative_df) > 1:
+            panels.append(
+                (cumulative_df, "r2_cumulative", "no_of_cpds_cumulative",
+                 "Cumulative R\u00b2",
+                 "Cumulative R\u00b2 (all prospective compounds up to this month)",
+                 "No. of compounds (cumulative)")
+            )
+        else:
+            panels.append((agg_df, "r2", "no_of_cpds", "R2", "R2 over time", count_legend))
+
+        for data, metric, count_col, y_label, metric_legend, count_legend in panels:
             fig, ax = plt.subplots(figsize=(5, 5))
             fig.canvas.header_visible = False
             ax2 = ax.twinx()
+            x_pos = self._set_month_ticks(ax, list(data["model_version"]))
 
             ax.plot(
-                agg_df["model_version"],
-                agg_df[metric],
+                x_pos,
+                data[metric],
                 color="#0072B2",
                 marker="o",
                 linestyle="-",
-                label=f"{metric.upper()}",
+                label=y_label,
             )
             ax2.plot(
-                agg_df["model_version"],
-                agg_df["no_of_cpds"],
+                x_pos,
+                data[count_col],
                 color="grey",
                 marker="^",
                 linestyle="--",
@@ -913,23 +1006,19 @@ class Plotter:
             )
 
             ax.set_xlabel("Model Version", fontweight="bold")
-            ax.set_ylabel(f"{metric.upper()}", fontweight="bold")
+            ax.set_ylabel(y_label, fontweight="bold")
             ax2.set_ylabel("No. of compounds", fontweight="bold")
 
-            ax.set_xticklabels(agg_df["model_version"], rotation=90)
             ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
 
             ax.set_title(plot_title + " - Model performance over time")
             handles = [
-                Line2D([], [], color="#0072B2", marker="o", linestyle="-", label=f"{metric.upper()}"),
+                Line2D([], [], color="#0072B2", marker="o", linestyle="-", label=y_label),
                 Line2D([], [], color="grey", marker="^", linestyle="--", label="No. of compounds"),
             ]
             ax.legend(
                 handles=handles,
-                labels=[
-                    f"{metric.upper()} over time",
-                    "No. of compounds considered " "for prediction each month",
-                ],
+                labels=[metric_legend, count_legend],
                 bbox_to_anchor=(0.5, -0.3),
                 loc="upper center",
                 fontsize=7,

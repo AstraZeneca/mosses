@@ -102,6 +102,7 @@ def _series_metrics(
     op_pred: str | None,
     threshold_transformed: bool,
     include_time_series: bool,
+    structure_column: str | None = None,
 ) -> dict[str, Any]:
     """Compute the full metric bundle for one evaluated (sub-)set."""
     if evaluated is None:
@@ -122,6 +123,7 @@ def _series_metrics(
         "recommended": None,
         "enrichment_sweep": [],
         "stability_over_time": [],
+        "cumulative_r2_over_time": [],
         "time_weighted_stability": None,
         "experimental_values_over_time": [],
     }
@@ -174,7 +176,20 @@ def _series_metrics(
             out["stability_over_time"] = []
 
         try:
-            t_labels, scores, w_scores = (
+            out["cumulative_r2_over_time"] = _records(
+                metrics_calculator.aggregate_cumulative_r2(
+                    df=evaluated.test_df,
+                    scale=plot_scale,
+                    model_version_col=model_version,
+                    op_exp=op_exp,
+                    op_pred=op_pred,
+                )
+            )
+        except Exception:
+            out["cumulative_r2_over_time"] = []
+
+        try:
+            t_labels, scores, w_scores, struct_scores, r2_scores = (
                 metrics_calculator.compute_time_weighted_scores(
                     df=all_df,
                     model_version_col=model_version,
@@ -182,12 +197,22 @@ def _series_metrics(
                     scale=plot_scale,
                     op_exp=op_exp,
                     op_pred=op_pred,
+                    structure_col=structure_column,
+                    merge_months=True,
+                    prospective_index=evaluated.test_df.index,
                 )
             )
             out["time_weighted_stability"] = {
                 "labels": jsonify(list(t_labels)),
                 "scores": jsonify(scores),
                 "weighted_scores": jsonify(w_scores),
+                # Empty when the project data carries no structures.
+                "structural_scores": jsonify(struct_scores),
+                # R2 of predicted vs. observed for each month's prospective
+                # compounds (same definition as the headline R2) -- not a
+                # similarity-to-reference metric, but shares these same
+                # timepoints so it can be read against the other curves.
+                "r2_scores": jsonify(r2_scores),
             }
         except Exception:
             out["time_weighted_stability"] = None
@@ -367,6 +392,7 @@ def predictive_validity_metrics(
     op_exp: str | None = None,
     op_pred: str | None = None,
     threshold_transformed: bool = False,
+    structure_column: str | None = None,
 ) -> dict[str, Any]:
     """Compute predictive-validity metrics **without any rendering**.
 
@@ -394,6 +420,7 @@ def predictive_validity_metrics(
         series_column=series_column,
         op_exp=op_exp,
         threshold_transformed=threshold_transformed,
+        structure_column=structure_column,
     )
     evaluator.prepare_data(
         observed_col=observed_column,
@@ -413,6 +440,7 @@ def predictive_validity_metrics(
         op_pred=op_pred,
         threshold_transformed=threshold_transformed,
         include_time_series=True,
+        structure_column=evaluator.structure_column,
     )
 
     if not series_column:

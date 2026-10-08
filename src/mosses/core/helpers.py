@@ -2,7 +2,6 @@ import sys
 import textwrap
 
 import pandas as pd
-from IPython.core.display import display_markdown
 
 
 def is_in_notebook() -> bool:
@@ -33,6 +32,10 @@ def print_note(
         `notebook_message` is used after dedentation.
     """
     if is_in_notebook():
+        # Only imported here: IPython is always present inside a notebook, and
+        # is not a dependency of the library otherwise.
+        from IPython.display import display_markdown
+
         display_markdown(textwrap.dedent(notebook_message), raw=True)
     else:
         print(

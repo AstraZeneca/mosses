@@ -5,6 +5,7 @@ A library for assessing molecular property prediction models with tools for:
 - Predictive validity analysis
 - Heatmap visualizations
 - Multi-Parameter Optimization (MPO)
+- Headless, JSON-serialisable computation API
 
 Modules
 -------
@@ -14,6 +15,8 @@ heatmap
     Heatmap visualization tools
 mpo
     Multi-Parameter Optimization scoring and analysis
+data_api
+    Data-only versions of the evaluations, without plotting
 
 Example
 -------
@@ -33,4 +36,4 @@ __all__ = [
     "data_api",
 ]
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

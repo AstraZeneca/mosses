@@ -319,7 +319,7 @@ def project_heatmap_stats(
 
     # Format numeric columns: two decimals for R metrics and RMSE, integers for PPV/FOR.
     result_df_regrouped = (
-        result_df_regrouped.style.applymap(highlight_cells, subset=highlight_subset)
+        result_df_regrouped.style.map(highlight_cells, subset=highlight_subset)
         .format(
             {
                 "Pearson R2": "{:.2f}",
@@ -458,7 +458,7 @@ def global_heatmap_table(
     if cell_mode == "pct_set":
         styled = (
             result.style
-            .applymap(highlight_pct_cells, subset=model_cols_present)
+            .map(highlight_pct_cells, subset=model_cols_present)
             .format(
                 {c: lambda v: f"{int(v)}%" if v != "" and v is not None and not (isinstance(v, float) and pd.isna(v)) else ""
                  for c in model_cols_present},
@@ -491,7 +491,7 @@ def global_heatmap_table(
     else:
         styled = (
             result.style
-            .applymap(highlight_cells, subset=model_cols_present)
+            .map(highlight_cells, subset=model_cols_present)
             .format(precision=0, na_rep="")
             .hide(axis=0)
             .set_table_styles([

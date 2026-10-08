@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from mosses.core.metrics import apply_operation
+from mosses.core.metrics import apply_operation, resolve_structure_column
 
 
 @dataclass
@@ -28,6 +28,7 @@ class PredictiveValidityEvaluator:
         series_column: str | None = None,
         op_exp: str | None = None,
         threshold_transformed: bool = False,
+        structure_column: str | None = None,
     ) -> None:
         """
         Initialize the PredictiveValidityEvaluator.
@@ -48,6 +49,10 @@ class PredictiveValidityEvaluator:
             Scale to use for analysis ('log' or 'linear'), by default 'log'.
         series_column : Optional[str], optional
             Column name to filter data by series, by default None.
+        structure_column : Optional[str], optional
+            Column holding compound SMILES. When omitted it is
+            auto-detected, so structural similarity works out of the box on
+            data that carries structures.
         """
         self.df = df
         self.pos_class = self._validate_pos_class(pos_class)
@@ -57,6 +62,7 @@ class PredictiveValidityEvaluator:
         self.series_column = series_column
         self.op_exp = op_exp
         self.threshold_transformed = threshold_transformed
+        self.structure_column = resolve_structure_column(df, structure_column)
 
     def _validate_pos_class(self, pos_class):
         # Accept both UI-facing labels ("<", ">") and canonical inclusive
@@ -138,6 +144,12 @@ class PredictiveValidityEvaluator:
         if self.series_column is not None:
             columns.append(self.series_column)
             drop_na_columns.append(self.series_column)
+
+        # Structures are carried through for the structural-similarity
+        # score but are never required: a compound with a missing or
+        # unparseable structure still contributes to every other metric.
+        if self.structure_column is not None:
+            columns.append(self.structure_column)
 
         # Deduplicate while preserving order: callers may legitimately pass the
         # same column name for several roles (e.g. assay-evaluation models reuse

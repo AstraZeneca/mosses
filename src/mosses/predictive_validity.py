@@ -40,6 +40,7 @@ def calculate_and_plot(
     op_pred: str | None = None,
     threshold_label: str = "prediction threshold",
     threshold_transformed: bool = False,
+    structure_column: str | None = None,
 ):
     if (evaluated_data.test_count > 0 and series is None) or (
         len(evaluated_data.all_df) != 0 and series is not None
@@ -136,6 +137,13 @@ def calculate_and_plot(
             plotter.plot_model_stability(
                 agg_df=model_stability_data,
                 plot_title=plot_title,
+                cumulative_df=metrics_calculator.aggregate_cumulative_r2(
+                    df=evaluated_data.test_df,
+                    scale=plot_scale,
+                    model_version_col=model_version,
+                    op_exp=op_exp,
+                    op_pred=op_pred,
+                ),
             )
         else:
             print(
@@ -152,19 +160,32 @@ def calculate_and_plot(
         # NOTE: Value set arbitrarily. Might have to be optimized based
         # on a few runs for a couple of pilot projects
         discount_factor = 0.9
-        t_labels, scores, w_scores = metrics_calculator.compute_time_weighted_scores(
+        (
+            t_labels,
+            scores,
+            w_scores,
+            struct_scores,
+            r2_scores,
+        ) = metrics_calculator.compute_time_weighted_scores(
             df=all_df,
             model_version_col=model_version,
             discount_factor=discount_factor,
             scale=plot_scale,
             op_exp=op_exp,
             op_pred=op_pred,
+            structure_col=structure_column,
+            # One point per month, like the RMSE/R2 charts above it; and R2
+            # on the prospective validation set, like the headline R2.
+            merge_months=True,
+            prospective_index=evaluated_data.test_df.index,
         )
         plotter.plot_time_weighted_scores(
             t_labels=t_labels,
             scores=scores,
             w_scores=w_scores,
             plot_title=plot_title,
+            struct_scores=struct_scores,
+            r2_scores=r2_scores,
         )
 
     # ============ 3. threshold metrics and model usage advice ===============
@@ -455,6 +476,7 @@ def _process_and_plot(
     op_pred: str | None = None,
     threshold_label: str = "prediction threshold",
     threshold_transformed: bool = False,
+    structure_column: str | None = None,
 ):
     if not evaluated_data:
         series_msg = f" for {series} series" if series else ""
@@ -479,6 +501,7 @@ def _process_and_plot(
         op_pred=op_pred,
         threshold_label=threshold_label,
         threshold_transformed=threshold_transformed,
+        structure_column=structure_column,
     )
 
 
@@ -498,6 +521,7 @@ def evaluate_pv(
     op_pred=None,
     threshold_label: str = "prediction threshold",
     threshold_transformed: bool = False,
+    structure_column=None,
 ):
     """
     Evaluates the model performance for a given data set and desired criterion.
@@ -521,6 +545,10 @@ def evaluate_pv(
         plot_title (str): Name of the model evaluated.
         series_column (str, optional): Optional column name to group
             compounds by series name.
+        structure_column (str, optional): Column holding compound SMILES,
+            used for the structural similarity of the prospective compounds
+            to the earlier ones. Auto-detected when omitted; the structural
+            similarity is simply left out when the data has no structures.
 
     Returns:
         None: The function prints out all results.
@@ -535,6 +563,7 @@ def evaluate_pv(
         series_column=series_column,
         op_exp=op_exp,
         threshold_transformed=threshold_transformed,
+        structure_column=structure_column,
     )
     pv_evaluator.prepare_data(
         observed_col=observed_column,
@@ -560,6 +589,7 @@ def evaluate_pv(
             op_pred=op_pred,
             threshold_label=threshold_label,
             threshold_transformed=threshold_transformed,
+            structure_column=pv_evaluator.structure_column,
         )
         return
 
@@ -589,4 +619,5 @@ def evaluate_pv(
                 op_pred=op_pred,
                 threshold_label=threshold_label,
                 threshold_transformed=threshold_transformed,
+                structure_column=pv_evaluator.structure_column,
             )

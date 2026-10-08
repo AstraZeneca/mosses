@@ -7,15 +7,21 @@
 
 - **Predictive Validity Module** (`predictive_validity.py`) - Built on top of the concept of *predictive validity* described by Scannell et al. Nat Rev Drug Discov. 2022;21(12):915-931. [doi:10.1038/s41573-022-00552-x](https://www.nature.com/articles/s41573-022-00552-x). The function `predictive_validity.evaluate_pv()` allows the analysis of the quality of predictions on a given data set (e.g., a prospective test set of compounds), according to a desired threshold.
 
+  As part of this, `evaluate_pv()` tracks how similar each month's prospective compounds are to everything predicted before them (model versions released in the same calendar month are pooled), along three axes: similarity of the data, similarity of the correlations, and **similarity of the structures**. The structural similarity is the mean, over the prospective compounds, of the Tanimoto similarity to their nearest neighbour among the earlier compounds, using Morgan fingerprints (radius 2 over 2048 bits, i.e. ECFP4). It is computed whenever the data carries a structure column -- a column named `Structure`, `Smiles`, `Canonical SMILES` or `canonical_smiles` (case-insensitive) is recognised automatically, and any other name can be passed as `structure_column` -- and is simply left out of the plot otherwise. Because it depends only on the compounds and not on the model, it separates *"the model is being asked about new chemistry"* from *"the model is doing worse on chemistry it already knows"*.
+
+  R² is reported alongside, using the same definition as the R² of the predicted-vs-experimental scatter plot and counting only the prospective compounds: per month in the same similarity plot, and cumulatively -- over all prospective compounds up to each month -- in the model performance section, where the curve ends at the scatter-plot R². R² of a small monthly batch is unstable; the cumulative view shows how many compounds it takes to reach a stable value.
+
 - **Heatmap Module** (`heatmap.py`) - Summarises the information from the validation using *predictive validity*. The heatmap shows in one table, for each series in the data and according to the selected experimental threshold (SET), what the PPV and FOR percentages are, the recommended thresholds and resulting optimised PPV and FOR percentages, as well as, a qualitative label indicating whether the model is Good, Medium, or Bad.
 
 - **Multi-Parameter Optimization (MPO) Module** (`mpo.py`) - Provides a comprehensive toolkit for computing and optimizing MPO scores. MPO combines multiple molecular properties into a single score using sigmoid-based desirability functions.
+
+- **Data API Module** (`data_api.py`) - Headless counterpart of the evaluations. `data_api.predictive_validity_metrics()` returns the numbers that `evaluate_pv()` prints and plots as JSON-serialisable Python primitives, without rendering anything, so they can be served over a REST API or consumed by other programs.
 
 ## Software Requirements
 The library is written in Python and requires a version >= 3.10 for runtime. The dependencies required by the library are defined in `pyproject.toml` and are automatically installed when installing the library.
 
 ## How to Install `mosses`
-You can install the library using `pip install mosses`, or you can clone this repository then run `make build && make install`.
+You can install the library using `pip install mosses`, directly from GitHub using `pip install git+https://github.com/AstraZeneca/mosses.git`, or you can clone this repository then run `pip install .`.
 
 ## Examples of Usage
 Jupyter notebooks with examples can be found in the folder `examples`. We recommend following those to adapt your data, configs, and code to work with the modules in `mosses`.
@@ -231,11 +237,11 @@ mpo.plot_parameter_correlation_matrix(
     title="Parameter Correlations",
 )
 
-# Compare multiple methods
+# Compare two score columns (histograms and a Venn diagram of the top compounds)
 mpo.plot_comparison(
     df_with_scores,
-    method_columns=["MPO_Score", "Optimized_MPO"],
-    reference_column="Activity"
+    reference_column="Activity",
+    method_column="MPO_Score",
 )
 ```
 
@@ -277,7 +283,7 @@ mpo.plot_comparison(
 | `plot_experimental_correlation_matrix(df, cols)` | Experimental parameter correlations |
 | `plot_predicted_correlation_matrix(df, cols)` | Predicted parameter correlations |
 | `plot_mutual_info(importance)` | Feature importance bar chart |
-| `plot_comparison(df, methods, ref)` | Side-by-side method comparison |
+| `plot_comparison(df, reference_column, method_column)` | Compare two score columns with histograms and a Venn diagram |
 | `plot_scoring_curves(config)` | Visualize sigmoid functions |
 
 ### Example Notebook
