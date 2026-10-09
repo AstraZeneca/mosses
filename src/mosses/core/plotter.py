@@ -837,11 +837,13 @@ class Plotter:
         self,
         t_labels: list[str],
         scores: np.ndarray,
-        w_scores: np.ndarray,
+        w_scores: np.ndarray | None,
         plot_title: str,
         struct_scores: np.ndarray | None = None,
         r2_scores: np.ndarray | None = None,
-    ) -> None:
+        rmse_scores: np.ndarray | None = None,
+        max_labels: int = 30,
+    ) -> matplotlib.figure.Figure | None:
         """
         Plot the raw and time-weighted similarity
         and correlation scores over time.
@@ -852,8 +854,9 @@ class Plotter:
             List of time labels (e.g., ['Feb 2020', 'Mar 2020', ...]).
         scores : np.ndarray
             Array containing similarity and correlation scores.
-        w_scores : np.ndarray
+        w_scores : np.ndarray or None
             Array containing time-weighted similarity and correlation scores.
+            None leaves the time-weighted curves out.
         plot_title : str
             Title for the plot.
         struct_scores : np.ndarray, optional
@@ -866,6 +869,18 @@ class Plotter:
             similarity metrics so an accuracy drop can be read directly
             against a structural-novelty dip at the same x position; gaps
             mark timepoints with too few prospective compounds.
+        rmse_scores : np.ndarray, optional
+            RMSE of each timepoint's prospective compounds (see
+            :func:`mosses.core.metrics.compute_rmse_over_time`), drawn on the
+            same axis; the axis is extended when the RMSE exceeds it.
+        max_labels : int, optional
+            Maximum number of labelled x ticks; past it only every n-th
+            point is labelled, counted back from the last one.
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The figure, e.g. to save it; None when there is nothing to plot.
         """
         if len(t_labels) <= 1 or scores.size == 0:
             print(
@@ -876,7 +891,7 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(5, 5))
         fig.canvas.header_visible = False
 
-        x_pos = self._set_month_ticks(ax, t_labels)
+        x_pos = self._set_month_ticks(ax, t_labels, max_labels=max_labels)
 
         ax.plot(
             x_pos,
@@ -890,18 +905,22 @@ class Plotter:
             color="red",
             label="Similarity of correlations",
         )
-        ax.plot(
-            x_pos,
-            w_scores[:, 0],
-            color="cyan",
-            label="Similarity of data (Time-weighted)",
-        )
-        ax.plot(
-            x_pos,
-            w_scores[:, 1],
-            color="orange",
-            label="Similarity of correlations (Time-weighted)",
-        )
+        if w_scores is not None:
+            ax.plot(
+                x_pos,
+                w_scores[:, 0],
+                color="cyan",
+                label="Similarity of data (Time-weighted)",
+            )
+            ax.plot(
+                x_pos,
+                w_scores[:, 1],
+                color="orange",
+                label="Similarity of correlations (Time-weighted)",
+            )
+        has_rmse = rmse_scores is not None and np.any(np.isfinite(rmse_scores))
+        if has_rmse:
+            ax.plot(x_pos, rmse_scores, color="green", label="RMSE")
         if struct_scores is not None and np.any(np.isfinite(struct_scores)):
             ax.plot(
                 x_pos,
@@ -926,17 +945,16 @@ class Plotter:
         plt.rc("ytick", labelsize=8)
 
         # Below the axes: inside, it covers the low end of the scale where
-        # the R2 line often runs.
-        ax.legend(
-            bbox_to_anchor=(0.5, -0.3),
-            loc="upper center",
-            ncol=2,
-            fontsize=7,
-        )
+        # the R2 line often runs. It is a figure legend at the bottom, with
+        # the axes laid out above the space it takes, so that it cannot run
+        # into the rotated tick labels and the axis label.
+        legend = fig.legend(loc="lower center", ncol=2, fontsize=7)
         plt.title(plot_title)
-        ax.set_ylim(0, 1.1)
-        plt.tight_layout()
+        ax.set_ylim(0, max(1.1, 1.05 * np.nanmax(rmse_scores)) if has_rmse else 1.1)
+        legend_height = legend.get_window_extent(fig.canvas.get_renderer()).height
+        plt.tight_layout(rect=(0, legend_height / fig.bbox.height, 1, 1))
         plt.show()
+        return fig
 
     def plot_model_stability(
         self,

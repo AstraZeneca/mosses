@@ -1402,6 +1402,90 @@ def compute_time_weighted_scores(
     return t_labels, scores, w_scores, struct_scores, r2_scores
 
 
+def compute_rmse_over_time(
+    df: pd.DataFrame,
+    model_version_col: str,
+    scale: str,
+    op_exp: str | None = None,
+    op_pred: str | None = None,
+    merge_months: bool = False,
+    prospective_index: pd.Index | None = None,
+) -> np.ndarray:
+    """
+    Compute the RMSE of the prospective compounds at every timepoint of
+    :func:`compute_time_weighted_scores`.
+
+    With the same arguments, the result lines up with the scores that
+    function returns, so the RMSE can be drawn on the same axis as the
+    similarities (`rmse_scores` of ``Plotter.plot_time_weighted_scores``):
+    the values are transformed the same way, and a timepoint is kept under
+    the same rule. Like the R-squared there, the RMSE counts only the
+    prospective compounds of each timepoint.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns 'observed', 'predicted' and the model version.
+    model_version_col : str
+        Version of the model with which the predictions were made.
+    scale : str
+    op_exp : str, optional
+        Operation on the experimental values; derived from `scale` when
+        omitted.
+    op_pred : str, optional
+        Operation on the predicted values.
+    merge_months : bool, optional
+        If True, model versions released in the same calendar month are
+        pooled into a single timepoint.
+    prospective_index : pd.Index, optional
+        Index labels of the prospective validation compounds. When given,
+        the RMSE is computed on those compounds only; otherwise on every
+        compound of the timepoint.
+
+    Returns
+    -------
+    np.ndarray
+        RMSE per timepoint, NaN where fewer than 5 compounds qualify.
+    """
+    # Same transform and timepoints as compute_time_weighted_scores.
+    df = df.copy()
+    df["model_version_date"] = _parse_model_version_dates(df[model_version_col])
+    oe, pe = _resolve_ops(scale, op_exp, op_pred)
+    if needs_log_axis(oe) and needs_log_axis(pe):
+        df = df[((df["observed"] != 0) & (df["predicted"] != 0))]
+    elif needs_log_axis(oe):
+        df = df[df["observed"] != 0]
+    elif needs_log_axis(pe):
+        df = df[df["predicted"] != 0]
+    if needs_log_axis(oe) or needs_log_axis(pe):
+        df["observed"] = apply_operation(df["observed"].values, oe)
+        df["predicted"] = apply_operation(df["predicted"].values, pe)
+
+    if merge_months:
+        df["timepoint"] = (
+            df["model_version_date"].dt.to_period("M").dt.to_timestamp()
+        )
+    else:
+        df["timepoint"] = df["model_version_date"]
+    if prospective_index is not None:
+        is_prospective = df.index.isin(prospective_index)
+    else:
+        is_prospective = np.ones(len(df), dtype=bool)
+
+    rmse_list = []
+    for t in np.unique(df["timepoint"])[1:]:
+        train_mask = df["timepoint"] < t
+        test_mask = df["timepoint"] == t
+        if (train_mask.sum() >= 5) and (test_mask.sum() >= 5):
+            rows = df[test_mask.to_numpy() & is_prospective]
+            rmse_list.append(
+                math.sqrt(mean_squared_error(rows["observed"], rows["predicted"]))
+                if len(rows) >= 5
+                else np.nan
+            )
+    return np.array(rmse_list, dtype=float)
+
+
 def compute_scatter_metrics(
     df: pd.DataFrame,
     scale: str,

@@ -11,6 +11,8 @@
 
   R² is reported alongside, using the same definition as the R² of the predicted-vs-experimental scatter plot and counting only the prospective compounds: per month in the same similarity plot, and cumulatively -- over all prospective compounds up to each month -- in the model performance section, where the curve ends at the scatter-plot R². R² of a small monthly batch is unstable; the cumulative view shows how many compounds it takes to reach a stable value.
 
+  The similarity chart can also be drawn on its own with `Plotter.plot_time_weighted_scores()`, e.g. for a figure: optional settings leave out the time-weighted curves and R², add the RMSE of the same compounds (computed by `compute_rmse_over_time()`) and set how many x labels are shown.
+
 - **Heatmap Module** (`heatmap.py`) - Summarises the information from the validation using *predictive validity*. The heatmap shows in one table, for each series in the data and according to the selected experimental threshold (SET), what the PPV and FOR percentages are, the recommended thresholds and resulting optimised PPV and FOR percentages, as well as, a qualitative label indicating whether the model is Good, Medium, or Bad.
 
 - **Multi-Parameter Optimization (MPO) Module** (`mpo.py`) - Provides a comprehensive toolkit for computing and optimizing MPO scores. MPO combines multiple molecular properties into a single score using sigmoid-based desirability functions.
@@ -25,6 +27,8 @@ You can install the library using `pip install mosses`, directly from GitHub usi
 
 ## Examples of Usage
 Jupyter notebooks with examples can be found in the folder `examples`. We recommend following those to adapt your data, configs, and code to work with the modules in `mosses`.
+
+`examples/similarity_over_time.ipynb` draws the similarity chart of `evaluate_pv()` on its own, as in the report and with the optional settings for a figure.
 
 ---
 
